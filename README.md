@@ -1,7 +1,7 @@
 <img src="pinecone-logo.png" /><img src="locust-logo.webp" height=125px/> 
 
 # Locust load testing for Pinecone
-Run load tests against your Pinecone index. This repository assumes you already have a Pinecone account, and index, and data has already been upserted. To learn more about how to write a locust file [click here](https://docs.locust.io/en/stable/writing-a-locustfile.html)
+Run load tests against your Pinecone index. This repository assumes you already have a Pinecone account, an index, and data has already been upserted. To learn more about how to write a locust file [click here](https://docs.locust.io/en/stable/writing-a-locustfile.html)
 
 ## Installation
 
