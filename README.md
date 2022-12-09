@@ -32,7 +32,7 @@ bash ./locust.sh
 This script will start with a setup shell tool which helps you configure the app.
 You should provide this script the following:
 1. API key Pinecone such as fb1b20bc-d702-4248-bb72-1fcd50f03616 (Your API Key is in your Pinecone console under Projects)
-2. Full path to your index such as http://squad-p2-2a849c7.svc.us-east-1-aws.pinecone.io (Your API Host is found under the index section of your Pinecone console)
+2. Full path to your index such as https://squad-p2-2a849c7.svc.us-east-1-aws.pinecone.io (Your API Host is found under the index section of your Pinecone console)
 
 Note: once you configure your app, the API key and API Host will be written to a .env file in the repo,
 and will be used automatically next time you run the script. You can edit this as needed if your API key or API host change in the future.
