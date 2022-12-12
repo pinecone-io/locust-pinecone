@@ -23,7 +23,7 @@ source .venv/bin/activate
 pip3 install -r requirements.txt
 ```
 
-## Prepare the environment variables and start Locust
+### Prepare the environment variables and start Locust
 
 Run the following bash script:
 
@@ -73,7 +73,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Prepare the environment variables and start Locust
+### Prepare the environment variables and start Locust
 
 Run the following bash script:
 
