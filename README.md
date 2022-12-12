@@ -1,7 +1,7 @@
 <img src="pinecone-logo.png" /><img src="locust-logo.webp" height=125px/> 
 
 # Locust load testing for Pinecone
-Run load tests against your Pinecone index. This repository assumes you already have a Pinecone account, an index, and data has already been upserted. To learn more about how to write a locust file [click here](https://docs.locust.io/en/stable/writing-a-locustfile.html)
+### Run load tests against your Pinecone index. This repository assumes you already have a Pinecone account, an index, and data has already been upserted. Learn more about how to write a Locust file [here](https://docs.locust.io/en/stable/writing-a-locustfile.html).
 
 ## Installation on Macbook Pro M1
 
@@ -14,8 +14,6 @@ git clone https://github.com/pinecone-io/locust-pinecone.git
 ```shell
 cd locust-pinecone
 python3 -m venv .venv
-```
-```shell
 source .venv/bin/activate
 ```
 
@@ -25,9 +23,9 @@ source .venv/bin/activate
 pip3 install -r requirements.txt
 ```
 
-## Prepare the environment variables start Locust
+## Prepare the environment variables and start Locust
 
-2. run the following bash script:
+Run the following bash script:
 
 ```shell
 ./locust.sh
@@ -75,9 +73,9 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Prepare the environment variables start Locust
+## Prepare the environment variables and start Locust
 
-2. run the following bash script:
+Run the following bash script:
 
 ```shell
 ./locust.sh
@@ -102,6 +100,12 @@ The next time you run the application, it will load the environmental variables 
 ```shell
 ./locust.sh
 ```
+
+## Getting started with the Locust Web UI
+Learn more about using the Locust Web UI [here](https://docs.locust.io/en/stable/quickstart.html)  
+
+<img src="locust_screenshot.png" alt="screenshot" height="400px"/>  
+
 ## Additional performance notes and optimizations (all environments)
 1. While this can run locally on a machine in your home network, you **will** experience additional latencies depending on your location. It is recommended to use this on a VM in the cloud, preferably on the same cloud provider (GCP,AWS) and in the same region to minimize the latency. This will give a more accurate picture of how your infrastructure performs with Pinecone when you go to production. 
 2. The test cases included in the locust.py file are designed to generate random queries along with random categories. It also exercises several endpoints such as query, fetch, delete, and demonstrates metadata filtering. You should consider your use case and adjust these tests accordingly to reflect the real world scenarios you expect to encounter. 
