@@ -8,7 +8,7 @@ load_dotenv()  # take environment variables from .env.
 
 word_list = [x.strip() for x in open("./colornames.txt", "r")]
 topK = 50
-includeMetadataValue = False
+includeMetadataValue = True
 includeValuesValue = False
 apikey = os.environ['PINECONE_API_KEY']
 dimensions = 384
@@ -26,11 +26,13 @@ class locustUser(HttpUser):
                               "topK": topK,
                               "includeMetadata": includeMetadataValue,
                               "includeValues": includeValuesValue})
+
     @task
     def fetchQuery(self):
         randId = random.randint(0,85794)
         self.client.get("/vectors/fetch?ids=" + str(randId), name=f"Fetch",
                         headers={"Api-Key": apikey})
+
     @task
     def deleteById(self):
         randId = random.randint(0,85794)
@@ -40,14 +42,14 @@ class locustUser(HttpUser):
 
     @task
     def vectorMetadataQuery(self):
-        metadata = dict(category=random.choices(word_list))
+        metadata = dict(color=random.choices(word_list))
         self.client.post("/query", name=f"Vector + Metadata",
                         headers={"Api-Key": apikey},
                         json={"queries": [{"values": self.randomQuery()}],
                               "topK": topK,
                               "includeMetadata": includeMetadataValue,
                               "includeValues": includeValuesValue,
-                              "filter": {"title": metadata['category'][0]}})
+                              "filter": {"color": metadata['color'][0]}})
 
     @task
     def vectorNamespaceQuery_(self):
@@ -61,7 +63,7 @@ class locustUser(HttpUser):
 
     @task
     def vectorMetadataNamespaceQuery(self):
-        metadata = dict(category=random.choices(word_list))
+        metadata = dict(color=random.choices(word_list))
         self.client.get("/query", name=f"Vector + Metadata + Namespace (namespace1)",
                         headers={"Api-Key": apikey},
                         json={"queries": [{"values": self.randomQuery()}],
@@ -69,4 +71,4 @@ class locustUser(HttpUser):
                               "includeMetadata": includeMetadataValue,
                               "includeValues": includeValuesValue,
                               "namespace": "namespace1",
-                              "filter": {"category": metadata['category'][0]}})
+                              "filter": {"color": metadata['color'][0]}})
