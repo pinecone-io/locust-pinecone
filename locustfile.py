@@ -6,7 +6,7 @@ import os
 
 load_dotenv()  # take environment variables from .env.
 
-word_list = [x.strip() for x in open("./wordlist.10000.txt", "r")]
+word_list = [x.strip() for x in open("./colornames.txt", "r")]
 topK = 50
 includeMetadataValue = False
 includeValuesValue = False
