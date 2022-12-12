@@ -89,7 +89,7 @@ You should provide this script the following:
 Note: once you configure your app, the API key and API Host will be written to a .env file in the repo,
 and will be used automatically next time you run the script. You can edit this as needed if your API key or API host change in the future.
 
-After writing the .env file, the script will then start Locust which can be accessed following the instructions in the shell
+After writing the .env file, the script will then start Locust which can be accessed following the instructions in the shell. Leave the shell open with Locust running while you are testing.
 ```shell
 pineconeMac.local/INFO/locust.main: Starting web interface at http://0.0.0.0:8089 (accepting connections from all network interfaces)  
 
