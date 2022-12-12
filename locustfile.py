@@ -20,7 +20,7 @@ class locustUser(HttpUser):
     #wait_time = between(1, 3)
     @task
     def vectorQuery(self):
-        self.client.post("/query", name=f"VectorQuery",
+        self.client.post("/query", name=f"Vector (Query only)",
                         headers={"Api-Key": apikey},
                         json={"queries": [{"values": self.randomQuery()}],
                               "topK": topK,
