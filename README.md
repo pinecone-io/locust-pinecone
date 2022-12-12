@@ -1,7 +1,7 @@
 <img src="pinecone-logo.png" /><img src="locust-logo.webp" height=125px/> 
 
 # Locust load testing for Pinecone
-### Run load tests against your Pinecone index. This repository assumes you already have a Pinecone account, an index, and data has already been upserted. Learn more about how to write a Locust file [here](https://docs.locust.io/en/stable/writing-a-locustfile.html).
+Run load tests against your Pinecone index. This repository assumes you already have a Pinecone account, an index, and data has already been upserted. Learn more about how to write a Locust file [here](https://docs.locust.io/en/stable/writing-a-locustfile.html).
 
 ## Installation on Macbook Pro M1
 
@@ -23,9 +23,9 @@ source .venv/bin/activate
 pip3 install -r requirements.txt
 ```
 
-### Prepare the environment variables and start Locust
+Prepare the environment variables and start Locust
 
-Run the following bash script:
+4. Run the following bash script:
 
 ```shell
 ./locust.sh
@@ -73,9 +73,9 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Prepare the environment variables and start Locust
+Prepare the environment variables and start Locust
 
-Run the following bash script:
+4. Run the following bash script:
 
 ```shell
 ./locust.sh
