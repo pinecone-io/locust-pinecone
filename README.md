@@ -1,4 +1,4 @@
-<img src="pinecone-logo.png" /><img src="locust-logo.webp" height=125px/> 
+<img src="./readme/pinecone-logo.png" /><img src="./readme/locust-logo.webp" height=125px/> 
 
 # Locust load testing for Pinecone
 Run load tests against your Pinecone index. This repository assumes you already have a Pinecone account, an index, and data has already been upserted. Learn more about how to write a Locust file [here](https://docs.locust.io/en/stable/writing-a-locustfile.html).
@@ -104,7 +104,7 @@ The next time you run the application, it will load the environmental variables 
 ## Getting started with the Locust Web UI
 Learn more about using the Locust Web UI [here](https://docs.locust.io/en/stable/quickstart.html)  
 
-<img src="locust_screenshot.png" alt="screenshot" height="400px"/>  
+<img src="./readme/locust_screenshot.png" alt="screenshot" height="400px"/>  
 
 ## Additional performance notes and optimizations (all environments)
 1. While this can run locally on a machine in your home network, you **will** experience additional latencies depending on your location. It is recommended to use this on a VM in the cloud, preferably on the same cloud provider (GCP,AWS) and in the same region to minimize the latency. This will give a more accurate picture of how your infrastructure performs with Pinecone when you go to production. 
