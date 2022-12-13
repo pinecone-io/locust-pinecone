@@ -37,6 +37,7 @@ def main():
             f.writelines(lines)
 
     print("[green]Setup is done. You can edit your API key and API host in the .env file in the root directory.\n[green]")
+    print("[green]Starting Locust...\n[green]")
 
 
 if __name__ == '__main__':
