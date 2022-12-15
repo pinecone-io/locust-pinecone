@@ -20,7 +20,7 @@ source .venv/bin/activate
 3. Install project requirements:
 
 ```shell
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 Prepare the environment variables and start Locust
