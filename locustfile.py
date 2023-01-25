@@ -17,7 +17,7 @@ dimensions = 768
 
 class locustUser(HttpUser):
     def randomQuery(self):
-        #return np.random.rand(dimensions).tolist()
+        #return np.random.uniform(-1, 1, dimensions).tolist()
         return json.loads(random.choices(queries)[0])
 
     #wait_time = between(1, 3)
