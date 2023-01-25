@@ -11,7 +11,7 @@ topK = 50
 includeMetadataValue = True
 includeValuesValue = False
 apikey = os.environ['PINECONE_API_KEY']
-dimensions = 384
+dimensions = 768
 
 class locustUser(HttpUser):
     def randomQuery(self):
@@ -43,7 +43,7 @@ class locustUser(HttpUser):
     @task
     def vectorMetadataQuery(self):
         metadata = dict(color=random.choices(word_list))
-        self.client.post("/query", name=f"Vector + Metadata",
+        self.client.post("/query", name=f"Vector (Query + Metadata Filter)",
                         headers={"Api-Key": apikey},
                         json={"queries": [{"values": self.randomQuery()}],
                               "topK": topK,
@@ -51,24 +51,24 @@ class locustUser(HttpUser):
                               "includeValues": includeValuesValue,
                               "filter": {"color": metadata['color'][0]}})
 
-    @task
-    def vectorNamespaceQuery_(self):
-        self.client.post("/query", name=f"Vector + Namespace (namespace1)",
-                        headers={"Api-Key": apikey},
-                        json={"queries": [{"values": self.randomQuery()}],
-                              "topK": topK,
-                              "includeMetadata": includeMetadataValue,
-                              "includeValues": includeValuesValue,
-                              "namespace": "namespace1"})
+    # @task
+    # def vectorNamespaceQuery_(self):
+    #     self.client.post("/query", name=f"Vector + Namespace (namespace1)",
+    #                     headers={"Api-Key": apikey},
+    #                     json={"queries": [{"values": self.randomQuery()}],
+    #                           "topK": topK,
+    #                           "includeMetadata": includeMetadataValue,
+    #                           "includeValues": includeValuesValue,
+    #                           "namespace": "namespace1"})
 
-    @task
-    def vectorMetadataNamespaceQuery(self):
-        metadata = dict(color=random.choices(word_list))
-        self.client.get("/query", name=f"Vector + Metadata + Namespace (namespace1)",
-                        headers={"Api-Key": apikey},
-                        json={"queries": [{"values": self.randomQuery()}],
-                              "topK": topK,
-                              "includeMetadata": includeMetadataValue,
-                              "includeValues": includeValuesValue,
-                              "namespace": "namespace1",
-                              "filter": {"color": metadata['color'][0]}})
+    # @task
+    # def vectorMetadataNamespaceQuery(self):
+    #     metadata = dict(color=random.choices(word_list))
+    #     self.client.get("/query", name=f"Vector + Metadata + Namespace (namespace1)",
+    #                     headers={"Api-Key": apikey},
+    #                     json={"queries": [{"values": self.randomQuery()}],
+    #                           "topK": topK,
+    #                           "includeMetadata": includeMetadataValue,
+    #                           "includeValues": includeValuesValue,
+    #                           "namespace": "namespace1",
+    #                           "filter": {"color": metadata['color'][0]}})
