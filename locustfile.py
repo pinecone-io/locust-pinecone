@@ -7,13 +7,15 @@ import json
 
 load_dotenv()  # take environment variables from .env.
 
-word_list = [x.strip() for x in open("./colornames.txt", "r")]
+#word_list = [x.strip() for x in open("./colornames.txt", "r")]
 queries = [x.strip() for x in open("./sample-sbert-vectors.txt", "r")]
 topK = 100
 includeMetadataValue = True
 includeValuesValue = False
 apikey = os.environ['PINECONE_API_KEY']
 dimensions = 768
+response = json.load(open("./response.json"))
+records = [match for id in response['results'] for match in id['matches']]
 
 class locustUser(HttpUser):
     def randomQuery(self):
@@ -21,32 +23,37 @@ class locustUser(HttpUser):
         return json.loads(random.choices(queries)[0])
 
     #wait_time = between(1, 3)
-    # @task
-    # def vectorQuery(self):
-    #     self.client.post("/query", name=f"Vector (Query only)",
-    #                     headers={"Api-Key": apikey},
-    #                     json={"queries": [{"values": self.randomQuery()}],
-    #                           "topK": topK,
-    #                           "includeMetadata": includeMetadataValue,
-    #                           "includeValues": includeValuesValue})
+    @task
+    def vectorQuery(self):
+        self.client.post("/query", name=f"Vector (Random Query)",
+                        headers={"Api-Key": apikey},
+                        json={"queries": [{"values": np.random.uniform(-1, 1, dimensions).tolist()}],
+                              "topK": topK,
+                              "includeMetadata": includeMetadataValue,
+                              "includeValues": includeValuesValue})
 
-    # @task(1)
-    # def fetchQuery(self):
-    #     randId = random.randint(0,85794)
-    #     self.client.get("/vectors/fetch?ids=" + str(randId), name=f"Fetch",
-    #                     headers={"Api-Key": apikey})
+    @task
+    def fetchQuery(self):
+        self.client.get("/vectors/fetch?ids=" + random.choices(records,k=1)[0]['id'], name=f"Fetch by known ID",
+                        headers={"Api-Key": apikey})
 
-    # @task(1)
-    # def deleteById(self):
-    #     randId = random.randint(0,85794)
-    #     self.client.post("/vectors/delete", name=f"Delete",
-    #                     headers={"Api-Key": apikey},
-    #                     json={"ids": [str(randId)]})
+    @task
+    def deleteById(self):
+        self.client.post("/vectors/delete", name=f"Delete",
+                        headers={"Api-Key": apikey},
+                        json={"ids": [random.choices(records,k=1)[0]['id']]})
+
+    @task
+    def vectorUpsert(self):
+        record = [random.choices(records,k=1)[0]]
+        self.client.post("/vectors/upsert", name=f"Upsert",
+                        headers={"Api-Key": apikey},
+                        json={"vectors": [{"values": record[0]['values'],"metadata": record[0]['metadata'],"id": record[0]['id']}]})
 
     @task
     def vectorMetadataQuery(self):
-        metadata = dict(color=random.choices(word_list))
-        self.client.post("/query", name=f"Vector (Query + Metadata Filter)",
+        #metadata = dict(color=random.choices(word_list))
+        self.client.post("/query", name=f"Vector (Common Query + Metadata Filter)",
                         headers={"Api-Key": apikey},
                         json={"queries": [{"values": self.randomQuery()}],
                               "topK": topK,
