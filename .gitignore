@@ -1,9 +1,5 @@
-
 .DS_Store
 __pycache__/*
 .venv/*
 .env
 Guide.md
-locustfile.py.bak
-locustdev.ipynb
-
