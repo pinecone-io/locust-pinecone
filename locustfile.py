@@ -21,6 +21,16 @@ class locustUser(HttpUser):
     # wait_time = between(1, 3)
     @task
     def vectorQuery(self):
+        """
+        Beware: Quality alert!!!
+        While querying by randomQuery() *does* work, and will give an
+        idea of performance metrics (RPS, latency, etc.), the responses
+        from these queries will suffer from rather low recall as
+        compared to the actual ground truth nearest neighbors,
+        particularly for higher dimensionality and/or sparser vector
+        space. ANNs are generally optimized for querying denser
+        locations in vector space.
+        """
         self.client.post("/query", name="Vector (Query only)",
                          headers={"Api-Key": apikey},
                          json={"queries": [{"values": self.randomQuery()}],
