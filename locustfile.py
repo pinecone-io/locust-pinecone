@@ -13,58 +13,59 @@ includeValuesValue = False
 apikey = os.environ['PINECONE_API_KEY']
 dimensions = 384
 
+
 class locustUser(HttpUser):
     def randomQuery(self):
         return np.random.rand(dimensions).tolist()
 
-    #wait_time = between(1, 3)
+    # wait_time = between(1, 3)
     @task
     def vectorQuery(self):
-        self.client.post("/query", name=f"Vector (Query only)",
-                        headers={"Api-Key": apikey},
-                        json={"queries": [{"values": self.randomQuery()}],
-                              "topK": topK,
-                              "includeMetadata": includeMetadataValue,
-                              "includeValues": includeValuesValue})
+        self.client.post("/query", name="Vector (Query only)",
+                         headers={"Api-Key": apikey},
+                         json={"queries": [{"values": self.randomQuery()}],
+                               "topK": topK,
+                               "includeMetadata": includeMetadataValue,
+                               "includeValues": includeValuesValue})
 
     @task
     def fetchQuery(self):
-        randId = random.randint(0,85794)
-        self.client.get("/vectors/fetch?ids=" + str(randId), name=f"Fetch",
+        randId = random.randint(0, 85794)
+        self.client.get("/vectors/fetch?ids=" + str(randId), name="Fetch",
                         headers={"Api-Key": apikey})
 
     @task
     def deleteById(self):
-        randId = random.randint(0,85794)
-        self.client.post("/vectors/delete", name=f"Delete",
-                        headers={"Api-Key": apikey},
-                        json={"ids": [str(randId)]})
+        randId = random.randint(0, 85794)
+        self.client.post("/vectors/delete", name="Delete",
+                         headers={"Api-Key": apikey},
+                         json={"ids": [str(randId)]})
 
     @task
     def vectorMetadataQuery(self):
         metadata = dict(color=random.choices(word_list))
-        self.client.post("/query", name=f"Vector + Metadata",
-                        headers={"Api-Key": apikey},
-                        json={"queries": [{"values": self.randomQuery()}],
-                              "topK": topK,
-                              "includeMetadata": includeMetadataValue,
-                              "includeValues": includeValuesValue,
-                              "filter": {"color": metadata['color'][0]}})
+        self.client.post("/query", name="Vector + Metadata",
+                         headers={"Api-Key": apikey},
+                         json={"queries": [{"values": self.randomQuery()}],
+                               "topK": topK,
+                               "includeMetadata": includeMetadataValue,
+                               "includeValues": includeValuesValue,
+                               "filter": {"color": metadata['color'][0]}})
 
     @task
     def vectorNamespaceQuery_(self):
-        self.client.post("/query", name=f"Vector + Namespace (namespace1)",
-                        headers={"Api-Key": apikey},
-                        json={"queries": [{"values": self.randomQuery()}],
-                              "topK": topK,
-                              "includeMetadata": includeMetadataValue,
-                              "includeValues": includeValuesValue,
-                              "namespace": "namespace1"})
+        self.client.post("/query", name="Vector + Namespace (namespace1)",
+                         headers={"Api-Key": apikey},
+                         json={"queries": [{"values": self.randomQuery()}],
+                               "topK": topK,
+                               "includeMetadata": includeMetadataValue,
+                               "includeValues": includeValuesValue,
+                               "namespace": "namespace1"})
 
     @task
     def vectorMetadataNamespaceQuery(self):
         metadata = dict(color=random.choices(word_list))
-        self.client.get("/query", name=f"Vector + Metadata + Namespace (namespace1)",
+        self.client.get("/query", name="Vector + Metadata + Namespace (namespace1)",
                         headers={"Api-Key": apikey},
                         json={"queries": [{"values": self.randomQuery()}],
                               "topK": topK,
