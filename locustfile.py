@@ -1,5 +1,5 @@
 import random
-from locust import HttpUser, task
+from locust import HttpUser, events, task
 import numpy as np
 from dotenv import load_dotenv
 import os
@@ -9,10 +9,16 @@ from pinecone import Pinecone
 load_dotenv()  # take environment variables from .env.
 
 word_list = [x.strip() for x in open("./colornames.txt", "r")]
-topK = 50
 includeMetadataValue = True
 includeValuesValue = False
 apikey = os.environ['PINECONE_API_KEY']
+
+@events.init_command_line_parser.add_listener
+def _(parser):
+    parser.add_argument("--pinecone-topk", type=int, default=10,
+                        help=("Number of results to return from a Pinecone "
+                              "query() request. Defaults to 10."))
+
 
 class locustUser(HttpUser):
     def __init__(self, environment):
@@ -23,6 +29,9 @@ class locustUser(HttpUser):
         self.index = self.pinecone.Index(host=self.host)
         self.dimensions =self.index.describe_index_stats()['dimension']
 
+        # Set test properties from command-line args
+        self.top_k = environment.parsed_options.pinecone_topk
+
     def randomQuery(self):
         return np.random.rand(self.dimensions).tolist()
 
@@ -32,7 +41,7 @@ class locustUser(HttpUser):
         self.client.post("/query", name=f"Vector (Query only)",
                         headers={"Api-Key": apikey},
                         json={"queries": [{"values": self.randomQuery()}],
-                              "topK": topK,
+                              "topK": self.top_k,
                               "includeMetadata": includeMetadataValue,
                               "includeValues": includeValuesValue})
 
@@ -55,7 +64,7 @@ class locustUser(HttpUser):
         self.client.post("/query", name=f"Vector + Metadata",
                         headers={"Api-Key": apikey},
                         json={"queries": [{"values": self.randomQuery()}],
-                              "topK": topK,
+                              "topK": self.top_k,
                               "includeMetadata": includeMetadataValue,
                               "includeValues": includeValuesValue,
                               "filter": {"color": metadata['color'][0]}})
@@ -65,7 +74,7 @@ class locustUser(HttpUser):
         self.client.post("/query", name=f"Vector + Namespace (namespace1)",
                         headers={"Api-Key": apikey},
                         json={"queries": [{"values": self.randomQuery()}],
-                              "topK": topK,
+                              "topK": self.top_k,
                               "includeMetadata": includeMetadataValue,
                               "includeValues": includeValuesValue,
                               "namespace": "namespace1"})
@@ -76,7 +85,7 @@ class locustUser(HttpUser):
         self.client.get("/query", name=f"Vector + Metadata + Namespace (namespace1)",
                         headers={"Api-Key": apikey},
                         json={"queries": [{"values": self.randomQuery()}],
-                              "topK": topK,
+                              "topK": self.top_k,
                               "includeMetadata": includeMetadataValue,
                               "includeValues": includeValuesValue,
                               "namespace": "namespace1",
