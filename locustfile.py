@@ -1,10 +1,19 @@
 import random
-from locust import FastHttpUser, events, tag, task
+import time
+import grpc.experimental.gevent as grpc_gevent
+from locust import FastHttpUser, User, events, tag, task
 import numpy as np
 from dotenv import load_dotenv
 import os
 from pinecone import Pinecone
+from pinecone.grpc import PineconeGRPC
 
+
+# patch grpc so that it uses gevent instead of asyncio. This is required to
+# allow the multiple coroutines used by locust to run concurrently. Without it
+# (using default asyncio) will block the whole Locust/Python process,
+# in practice limiting to running a single User per worker process.
+grpc_gevent.init_gevent()
 
 load_dotenv()  # take environment variables from .env.
 
@@ -20,7 +29,7 @@ def _(parser):
                               "query() request. Defaults to 10."))
 
 
-class locustUser(FastHttpUser):
+class PineconeRest(FastHttpUser):
     def __init__(self, environment):
         super().__init__(environment)
 
@@ -98,3 +107,40 @@ class locustUser(FastHttpUser):
                               "includeValues": includeValuesValue,
                               "namespace": "namespace1",
                               "filter": {"color": metadata['color'][0]}})
+
+
+class PineconeGrpc(User):
+    def __init__(self, environment):
+        super().__init__(environment)
+
+        # Determine the dimensions of our index
+        self.pinecone = PineconeGRPC(apikey)
+        self.index = self.pinecone.Index(host=self.host)
+        self.dimensions =self.index.describe_index_stats()['dimension']
+
+        # Set test properties from command-line args
+        self.top_k = environment.parsed_options.pinecone_topk
+
+    def randomQuery(self):
+        # Return random floats in the range [-1.0, 1.0], suitable
+        # for using as query vector for typical embedding data.
+        return ((np.random.random_sample(self.dimensions) * 2.0) - 1.0).tolist()
+
+    @tag('query')
+    @task
+    def vectorQuery(self):
+        args = {'vector': self.randomQuery(),
+                  'top_k': self.top_k,
+                  'include_values': includeValuesValue,
+                  'include_metadata': includeValuesValue}
+        start = time.time()
+        result = self.index.query(**args)
+        stop = time.time()
+
+        response_time = (stop - start) * 1000.0
+        match_count = len(result.matches)
+
+        events.request.fire(request_type="gRPC",
+                            name="query",
+                            response_length=match_count,
+                            response_time=response_time)
