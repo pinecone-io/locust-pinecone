@@ -3,6 +3,8 @@ from locust import HttpUser, task
 import numpy as np
 from dotenv import load_dotenv
 import os
+from pinecone import Pinecone
+
 
 load_dotenv()  # take environment variables from .env.
 
@@ -11,11 +13,18 @@ topK = 50
 includeMetadataValue = True
 includeValuesValue = False
 apikey = os.environ['PINECONE_API_KEY']
-dimensions = 384
 
 class locustUser(HttpUser):
+    def __init__(self, environment):
+        super().__init__(environment)
+
+        # Determine the dimensions of our index
+        self.pinecone = Pinecone(apikey)
+        self.index = self.pinecone.Index(host=self.host)
+        self.dimensions =self.index.describe_index_stats()['dimension']
+
     def randomQuery(self):
-        return np.random.rand(dimensions).tolist()
+        return np.random.rand(self.dimensions).tolist()
 
     #wait_time = between(1, 3)
     @task

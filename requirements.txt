@@ -19,6 +19,7 @@ MarkupSafe==2.1.1
 msgpack==1.0.4
 numpy==1.23.5
 pandas==1.5.2
+pinecone-client
 psutil==5.9.4
 Pygments==2.13.0
 python-dateutil==2.8.2
