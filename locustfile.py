@@ -1,5 +1,5 @@
 import random
-from locust import HttpUser, events, tag, task
+from locust import FastHttpUser, events, tag, task
 import numpy as np
 from dotenv import load_dotenv
 import os
@@ -20,7 +20,7 @@ def _(parser):
                               "query() request. Defaults to 10."))
 
 
-class locustUser(HttpUser):
+class locustUser(FastHttpUser):
     def __init__(self, environment):
         super().__init__(environment)
 
