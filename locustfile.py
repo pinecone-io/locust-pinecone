@@ -1,5 +1,5 @@
 import random
-from locust import HttpUser, events, task
+from locust import HttpUser, events, tag, task
 import numpy as np
 from dotenv import load_dotenv
 import os
@@ -36,6 +36,7 @@ class locustUser(HttpUser):
         return np.random.rand(self.dimensions).tolist()
 
     #wait_time = between(1, 3)
+    @tag('query')
     @task
     def vectorQuery(self):
         self.client.post("/query", name=f"Vector (Query only)",
@@ -45,12 +46,14 @@ class locustUser(HttpUser):
                               "includeMetadata": includeMetadataValue,
                               "includeValues": includeValuesValue})
 
+    @tag('fetch')
     @task
     def fetchQuery(self):
         randId = random.randint(0,85794)
         self.client.get("/vectors/fetch?ids=" + str(randId), name=f"Fetch",
                         headers={"Api-Key": apikey})
 
+    @tag('delete')
     @task
     def deleteById(self):
         randId = random.randint(0,85794)
@@ -58,6 +61,7 @@ class locustUser(HttpUser):
                         headers={"Api-Key": apikey},
                         json={"ids": [str(randId)]})
 
+    @tag('query_meta')
     @task
     def vectorMetadataQuery(self):
         metadata = dict(color=random.choices(word_list))
@@ -69,6 +73,7 @@ class locustUser(HttpUser):
                               "includeValues": includeValuesValue,
                               "filter": {"color": metadata['color'][0]}})
 
+    @tag('query_namespace')
     @task
     def vectorNamespaceQuery_(self):
         self.client.post("/query", name=f"Vector + Namespace (namespace1)",
@@ -79,6 +84,7 @@ class locustUser(HttpUser):
                               "includeValues": includeValuesValue,
                               "namespace": "namespace1"})
 
+    @tag('query_meta_namespace')
     @task
     def vectorMetadataNamespaceQuery(self):
         metadata = dict(color=random.choices(word_list))
