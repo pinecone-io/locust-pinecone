@@ -33,7 +33,9 @@ class locustUser(FastHttpUser):
         self.top_k = environment.parsed_options.pinecone_topk
 
     def randomQuery(self):
-        return np.random.rand(self.dimensions).tolist()
+        # Return random floats in the range [-1.0, 1.0], suitable
+        # for using as query vector for typical embedding data.
+        return ((np.random.random_sample(self.dimensions) * 2.0) - 1.0).tolist()
 
     #wait_time = between(1, 3)
     @tag('query')
