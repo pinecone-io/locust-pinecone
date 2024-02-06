@@ -28,7 +28,7 @@ pinecone-client[grpc]==3.0.2
 pinecone-datasets==0.7.0
 protobuf==3.20.3
 psutil==5.9.4
-Pygments==2.13.0
+Pygments==2.15.0
 python-dateutil==2.8.2
 python-dotenv==0.21.0
 pytz==2022.6
