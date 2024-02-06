@@ -2,6 +2,10 @@ name: 'Create Index'
 description: 'Creates an index to be used in other tests'
 
 inputs:
+  environment:
+    description: 'The environment of the index (for Pod-based indexes)'
+    required: false
+    default: 'us-east4-gcp'
   region:
     description: 'The region of the index'
     required: false
@@ -30,6 +34,9 @@ outputs:
   index_name:
     description: 'The name of the index, including randomized suffix'
     value: ${{ steps.create-index.outputs.index_name }}
+  index_host:
+    description: 'The host of the index, including randomized suffix'
+    value: ${{ steps.create-index.outputs.index_host }}
 
 runs:
   using: 'composite'
@@ -41,7 +48,9 @@ runs:
       env:
         PINECONE_API_KEY: ${{ inputs.PINECONE_API_KEY }}
         NAME_PREFIX: ${{ inputs.name_prefix }}
-        REGION: ${{ inputs.region }}
-        CLOUD: ${{ inputs.cloud }}
+        ENVIRONMENT: ${{ inputs.environment }}
+# Remove ENVIRONMENT and uncomment to use serverless index instead.
+#        REGION: ${{ inputs.region }}
+#        CLOUD: ${{ inputs.cloud }}
         DIMENSION: ${{ inputs.dimension }}
         METRIC: ${{ inputs.metric }}

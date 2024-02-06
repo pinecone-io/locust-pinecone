@@ -47,7 +47,7 @@ jobs:
         pytest
       env:
         PINECONE_API_KEY: '${{ secrets.PINECONE_API_KEY }}'
-        INDEX_NAME: ${{ steps.create-index.outputs.index_name }}
+        INDEX_HOST: ${{ steps.create-index.outputs.index_host }}
     - name: Delete test index
       if: always()
       uses: ./.github/actions/delete-index

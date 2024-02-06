@@ -13,7 +13,7 @@ from pinecone import Pinecone
 def read_env_var(name):
     value = os.environ.get(name)
     if value is None:
-        raise 'Environment variable {} is not set'.format(name)
+        raise Exception(f'Environment variable {name} is not set')
     return value
 
 
@@ -51,7 +51,9 @@ def main():
         dimension=int(read_env_var('DIMENSION')),
         spec=spec
     )
+    index_host = 'https://' + pc.describe_index(index_name)['host']
     write_gh_output('index_name', index_name)
+    write_gh_output('index_host', index_host)
 
 
 if __name__ == '__main__':
