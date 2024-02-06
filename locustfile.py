@@ -1,7 +1,15 @@
+import pathlib
 import random
 import time
+from functools import wraps
+import gevent
 import grpc.experimental.gevent as grpc_gevent
 from locust import FastHttpUser, User, events, tag, task
+from locust.env import Environment
+from locust.exception import StopUser
+from locust.runners import Runner, WorkerRunner
+from locust.user.task import DefaultTaskSet, TaskSet
+import logging
 import numpy as np
 from dotenv import load_dotenv
 import os
@@ -17,7 +25,8 @@ grpc_gevent.init_gevent()
 
 load_dotenv()  # take environment variables from .env.
 
-word_list = [x.strip() for x in open("./colornames.txt", "r")]
+colornames_file = pathlib.Path(__file__).parent / "colornames.txt"
+word_list = [x.strip() for x in open(colornames_file, "r")]
 includeMetadataValue = True
 includeValuesValue = False
 apikey = os.environ['PINECONE_API_KEY']
@@ -34,6 +43,49 @@ def _(parser):
                              "'rest': Pinecone REST API (via a normal HTTP client). "
                              "'sdk': Pinecone Python SDK ('pinecone-client'). "
                              "'sdk+grpc': Pinecone Python SDK using gRPC as the underlying transport.")
+    # iterations option included from locust-plugins
+    parser.add_argument(
+        "-i",
+        "--iterations",
+        type=int,
+        help="Run at most this number of task iterations and terminate once they have finished",
+        default=0,
+    )
+
+
+@events.test_start.add_listener
+def set_up_iteration_limit(environment: Environment, **kwargs):
+    options = environment.parsed_options
+    if options.iterations:
+        runner: Runner = environment.runner
+        runner.iterations_started = 0
+        runner.iteration_target_reached = False
+        logging.debug(f"Iteration limit set to {options.iterations}")
+
+        def iteration_limit_wrapper(method):
+            @wraps(method)
+            def wrapped(self, task):
+                if runner.iterations_started == options.iterations:
+                    if not runner.iteration_target_reached:
+                        runner.iteration_target_reached = True
+                        logging.info(
+                            f"Iteration limit reached ({options.iterations}), stopping Users at the start of their next task run"
+                        )
+                    if runner.user_count == 1:
+                        logging.info("Last user stopped, quitting runner")
+                        if isinstance(runner, WorkerRunner):
+                            runner._send_stats()  # send a final report
+                        # need to trigger this in a separate greenlet, in case test_stop handlers do something async
+                        gevent.spawn_later(0.1, runner.quit)
+                    raise StopUser()
+                runner.iterations_started = runner.iterations_started + 1
+                method(self, task)
+
+            return wrapped
+
+        # monkey patch TaskSets to add support for iterations limit. Not ugly at all :)
+        TaskSet.execute_task = iteration_limit_wrapper(TaskSet.execute_task)
+        DefaultTaskSet.execute_task = iteration_limit_wrapper(DefaultTaskSet.execute_task)
 
 
 class PineconeUser(User):
