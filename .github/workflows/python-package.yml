@@ -9,6 +9,12 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# Only allow one workflow to run at once - given we need to create an index
+# for each python-version (3x), we want to constrain how many indexes are
+# needed for this project at any one time.
+concurrency:
+  group: build-and-test
+
 jobs:
   build:
 
