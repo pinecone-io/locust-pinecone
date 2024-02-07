@@ -34,15 +34,16 @@ apikey = os.environ['PINECONE_API_KEY']
 
 @events.init_command_line_parser.add_listener
 def _(parser):
-    parser.add_argument("--pinecone-topk", type=int, metavar="<int>", default=10,
-                        help=("Number of results to return from a Pinecone "
-                              "query() request. Defaults to 10."))
-    parser.add_argument("--pinecone-mode", choices=["rest", "sdk", "sdk+grpc"],
-                        default="rest",
-                        help="How to connect to the Pinecone index (default: %(default)s). Choices: "
-                             "'rest': Pinecone REST API (via a normal HTTP client). "
-                             "'sdk': Pinecone Python SDK ('pinecone-client'). "
-                             "'sdk+grpc': Pinecone Python SDK using gRPC as the underlying transport.")
+    pc_options = parser.add_argument_group("Pinecone-specific options")
+    pc_options.add_argument("--pinecone-topk", type=int, metavar="<int>", default=10,
+                            help=("Number of results to return from a Pinecone "
+                                  "query() request. Defaults to 10."))
+    pc_options.add_argument("--pinecone-mode", choices=["rest", "sdk", "sdk+grpc"],
+                            default="rest",
+                            help="How to connect to the Pinecone index (default: %(default)s). Choices: "
+                                 "'rest': Pinecone REST API (via a normal HTTP client). "
+                                 "'sdk': Pinecone Python SDK ('pinecone-client'). "
+                                 "'sdk+grpc': Pinecone Python SDK using gRPC as the underlying transport.")
     # iterations option included from locust-plugins
     parser.add_argument(
         "-i",
