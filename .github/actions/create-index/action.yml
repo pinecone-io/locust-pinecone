@@ -5,7 +5,6 @@ inputs:
   environment:
     description: 'The environment of the index (for Pod-based indexes)'
     required: false
-    default: 'us-east4-gcp'
   region:
     description: 'The region of the index'
     required: false
@@ -49,8 +48,7 @@ runs:
         PINECONE_API_KEY: ${{ inputs.PINECONE_API_KEY }}
         NAME_PREFIX: ${{ inputs.name_prefix }}
         ENVIRONMENT: ${{ inputs.environment }}
-# Remove ENVIRONMENT and uncomment to use serverless index instead.
-#        REGION: ${{ inputs.region }}
-#        CLOUD: ${{ inputs.cloud }}
+        REGION: ${{ inputs.region }}
+        CLOUD: ${{ inputs.cloud }}
         DIMENSION: ${{ inputs.dimension }}
         METRIC: ${{ inputs.metric }}
