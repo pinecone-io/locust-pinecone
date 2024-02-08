@@ -174,7 +174,7 @@ class PineconeRest(FastHttpUser):
         super().__init__(environment)
 
     def query(self, name: str, q_vector: list, top_k: int, q_filter=None, namespace=None):
-        json = {"queries": [{"values": q_vector}],
+        json = {"vector": q_vector,
                 "topK": top_k,
                 "includeMetadata": includeMetadataValue,
                 "includeValues": includeValuesValue}
