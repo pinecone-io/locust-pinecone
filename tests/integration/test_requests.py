@@ -16,7 +16,7 @@ def index_host():
     return host
 
 
-def spawn_locust(host, mode, extra_args):
+def spawn_locust(host, mode, timeout, extra_args=[]):
     proc = subprocess.Popen(
         ["locust", "--host", host, "--iterations=1", "--headless", "--json", "--pinecone-mode",
          mode] + extra_args,
@@ -24,7 +24,17 @@ def spawn_locust(host, mode, extra_args):
         stderr=PIPE,
         text=True,
     )
-    stdout, stderr = proc.communicate(timeout=4)
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        # Echo whatever stdout / stderr we got so far, to aid in debugging
+        if e.stdout:
+            for line in e.stdout.decode(errors='replace'):
+                print(line)
+        if e.stdout:
+            for line in e.stderr.decode(errors='replace'):
+                print(line, file=sys.stderr)
+        raise
     # Echo locust's stdout & stderr to our own, so pytest can capture and
     # report them on error.
     print(stdout)
@@ -32,11 +42,13 @@ def spawn_locust(host, mode, extra_args):
     return proc, stdout, stderr
 
 
-@pytest.mark.parametrize("mode", ["rest", "sdk", "sdk+grpc"])
-class TestPinecone:
+class TestPineconeBase:
     @staticmethod
-    def do_request(index_host, mode, tag, expected_name):
-        (proc, stdout, stderr) = spawn_locust(index_host, mode, ["--tags", tag])
+    def do_request(index_host, mode, tag, expected_name, timeout=4, extra_args=[]):
+        (proc, stdout, stderr) = spawn_locust(host=index_host,
+                                              mode=mode,
+                                              timeout=timeout,
+                                              extra_args=["--tags", tag] + extra_args)
         # Check that stderr contains the expected output, and no errors.
         assert '"Traceback' not in stderr
         assert 'All users spawned: {"PineconeUser": 1}' in stderr
@@ -48,6 +60,32 @@ class TestPinecone:
         assert stats['num_failures'] == 0
         assert proc.returncode == 0
 
+
+class TestPinecone(TestPineconeBase):
+    def test_datasets_list(self):
+        # Extend timeout for listing datasets, can take longer than default 4s.
+        (proc, stdout, stderr) = spawn_locust(host="unused",
+                                              mode="rest",
+                                              timeout=20,
+                                              extra_args=["--pinecone-dataset=help"])
+        # Check that stdout contains a list of datasets (don't want to hardcode
+        # complete set as that just makes the test brittle if any new datasets are added).
+        for dataset in ["ANN_MNIST_d784_euclidean                            60000      10000          784",
+                        "langchain-python-docs-text-embedding-ada-002         3476          0         1536",
+                        "quora_all-MiniLM-L6-bm25-100K                      100000      15000          384"]:
+            assert dataset in stdout
+        assert proc.returncode == 1
+
+    def test_dataset_load(self, index_host):
+        # Choosing a small dataset ("only" 60,000 documents) which also
+        # has a non-zero queries set.
+        test_dataset = "ANN_MNIST_d784_euclidean"
+        self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
+                        timeout=60, extra_args=["--pinecone-dataset", test_dataset])
+
+
+@pytest.mark.parametrize("mode", ["rest", "sdk", "sdk+grpc"])
+class TestPineconeModes(TestPineconeBase):
     def test_pinecone_query(self, index_host, mode):
         self.do_request(index_host, mode, 'query', 'Vector (Query only)')
 

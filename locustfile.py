@@ -3,6 +3,9 @@ import random
 import time
 from functools import wraps
 import gevent
+import json
+import pandas
+from google.cloud.storage import Bucket, Client, transfer_manager
 import grpc.experimental.gevent as grpc_gevent
 from locust import FastHttpUser, User, events, tag, task
 from locust.env import Environment
@@ -12,10 +15,13 @@ from locust.user.task import DefaultTaskSet, TaskSet
 import logging
 import numpy as np
 from dotenv import load_dotenv
+from pyarrow.parquet import ParquetDataset
 import os
 from pinecone import Pinecone
 from pinecone.grpc import PineconeGRPC
-
+import tempfile
+from tqdm import tqdm, trange
+import sys
 
 # patch grpc so that it uses gevent instead of asyncio. This is required to
 # allow the multiple coroutines used by locust to run concurrently. Without it
@@ -44,6 +50,20 @@ def _(parser):
                                  "'rest': Pinecone REST API (via a normal HTTP client). "
                                  "'sdk': Pinecone Python SDK ('pinecone-client'). "
                                  "'sdk+grpc': Pinecone Python SDK using gRPC as the underlying transport.")
+    pc_options.add_argument("--pinecone-dataset", type=str, metavar="<dataset_name> | 'help'", default=None,
+                            help="The dataset to use for index population and/or query generation. "
+                                 "Pass the value 'help' to list available datasets.")
+    pc_options.add_argument("--pinecone-populate-index", choices=["always", "never", "if-count-mismatch"],
+                            default="if-count-mismatch",
+                            help="Should the index be populated with the dataset before issuing requests. Choices: "
+                                 "'always': Always populate from dataset. "
+                                 "'never': Never populate from dataset. "
+                                 "'if-count-mismatch': Populate if the number of items in the index differs from the "
+                                 "number of items in th dataset, otherwise skip population. "
+                                 "(default: %(default)s).")
+    pc_options.add_argument("--pinecone-dataset-cache", type=str, default=".dataset_cache",
+                            help="Path to directory to cache downloaded datasets (default: %(default)s).")
+
     # iterations option included from locust-plugins
     parser.add_argument(
         "-i",
@@ -52,6 +72,34 @@ def _(parser):
         help="Run at most this number of task iterations and terminate once they have finished",
         default=0,
     )
+
+
+@events.init.add_listener
+def check_for_dataset(environment: Environment, **kwargs):
+    dataset_name = environment.parsed_options.pinecone_dataset
+    if not dataset_name:
+        environment.dataset = Dataset()
+        return
+    if dataset_name == "help":
+        # Print out the list of available datasets, then exit.
+        print("Fetching list of available datasets for --pinecone-dataset...")
+        available = Dataset.list()
+        # Copy the 'dimensions' model field from 'dense_model' into the top level
+        for a in available:
+            a['dimension'] = a['dense_model']['dimension']
+        df = pandas.DataFrame(available, columns=['name', 'documents', 'queries', 'dimension'])
+        print(df.to_markdown(index=False, headers=["Name", "Documents", "Queries", "Dimension"], tablefmt="simple"))
+        print()
+        sys.exit(1)
+
+    environment.dataset = Dataset(dataset_name, environment.parsed_options.pinecone_dataset_cache)
+    environment.dataset.load()
+    populate = environment.parsed_options.pinecone_populate_index
+    if populate != "never":
+        logging.info(
+            f"Populating index {environment.host} with {len(environment.dataset.documents)} vectors from dataset '{dataset_name}'")
+        environment.dataset.upsert_into_index(environment.host,
+                                              skip_if_count_identical=(populate == "if-count-mismatch"))
 
 
 @events.test_start.add_listener
@@ -89,6 +137,163 @@ def set_up_iteration_limit(environment: Environment, **kwargs):
         DefaultTaskSet.execute_task = iteration_limit_wrapper(DefaultTaskSet.execute_task)
 
 
+class Dataset:
+    """
+    Represents a Dataset used as the source of documents and/or queries for
+    Pinecone index operations.
+    The set of datasets are taken from the Pinecone public datasets
+    (https://docs.pinecone.io/docs/using-public-datasets), which reside in a
+    Google Cloud Storage bucket and are downloaded on-demand on first access,
+    then cached on the local machine.
+    """
+    gcs_bucket = "pinecone-datasets-dev"
+
+    def __init__(self, name: str = "", cache_dir: str = ""):
+        self.name = name
+        self.cache = pathlib.Path(cache_dir)
+        self.documents = None
+        self.queries = pandas.DataFrame()
+
+    @staticmethod
+    def list():
+        """
+        List all available datasets on the GCS bucket.
+        :return: A list of dict objects, one for each dataset.
+        """
+        client = Client.create_anonymous_client()
+        bucket: Bucket = client.bucket(Dataset.gcs_bucket)
+        metadata_blobs = bucket.list_blobs(match_glob="*/metadata.json")
+        datasets = []
+        for m in metadata_blobs:
+            datasets.append(json.loads(m.download_as_string()))
+        return datasets
+
+    def load(self):
+        """
+        Load the dataset, populating the 'documents' and 'queries' DataFrames.
+        """
+        self._download_dataset_files()
+
+        # Load all the parquet dataset (made up of one or more parquet files),
+        # to use for documents into a pandas dataframe.
+        self.documents = self._load_parquet_dataset("documents")
+
+        # If there is an explicit 'queries' dataset, then load that and use
+        # for querying, otherwise use documents directly.
+        self.queries = self._load_parquet_dataset("queries")
+        if self.queries.empty:
+            logging.debug("Using complete documents dataset for query data")
+            self.queries = self.documents
+
+    def upsert_into_index(self, index_host, skip_if_count_identical: bool = False):
+        """
+        Upsert the datasets' documents into the specified index.
+        :param index_host: Pinecone index to upsert into (must already exist)
+        :param skip_if_count_identical: If true then skip upsert if the index already contains the same number of
+               vectors as the dataset.
+        """
+        pinecone = PineconeGRPC(apikey)
+        index = pinecone.Index(host=index_host)
+        if skip_if_count_identical:
+            if index.describe_index_stats()['total_vector_count'] == len(self.documents):
+                logging.info(
+                    f"Skipping upsert as index already has same number of documents as dataset ({len(self.documents)}")
+                return
+
+        upserted_count = self._upsert_from_dataframe(index)
+        if upserted_count != len(self.documents):
+            logging.warning(
+                f"Not all records upserted successfully. Dataset count:{len(self.documents)},"
+                f" upserted count:{upserted_count}")
+
+    def _download_dataset_files(self):
+        self.cache.mkdir(parents=True, exist_ok=True)
+        logging.debug(f"Checking for existence of dataset '{self.name}' in dataset cache '{self.cache}'")
+        client = Client.create_anonymous_client()
+        bucket: Bucket = client.bucket(Dataset.gcs_bucket)
+        blobs = [b for b in bucket.list_blobs(prefix=self.name + "/")]
+
+        def should_download(blob):
+            path = self.cache / blob.name
+            if not path.exists():
+                return True
+            # File exists - check size, assume same size is same file.
+            # (Ideally would check hash (md5), but using hashlib.md5() to
+            # calculate the local MD5 does not match remove; maybe due to
+            # transmission as compressed file?
+            local_size = path.stat().st_size
+            remote_size = blob.size
+            return local_size != remote_size
+
+        to_download = [b for b in filter(lambda b: should_download(b), blobs)]
+        if not to_download:
+            return
+        pbar = tqdm(desc="Downloading datset",
+                    total=sum([b.size for b in to_download]),
+                    unit="Bytes",
+                    unit_scale=True)
+        for blob in to_download:
+            logging.debug(f"Dataset file '{blob.name}' not found in cache - will be downloaded")
+            dest_path = self.cache / blob.name
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            blob.download_to_filename(self.cache / blob.name)
+            pbar.update(blob.size)
+
+    def _load_parquet_dataset(self, kind):
+        parquet_files = [f for f in (self.cache / self.name).glob(kind + '/*.parquet')]
+        if not len(parquet_files):
+            return pandas.DataFrame
+
+        dataset = ParquetDataset(parquet_files)
+        # Read only the columns that Pinecone SDK makes use of.
+        if kind == "documents":
+            columns = ["id", "values", "sparse_values", "metadata"]
+        elif kind == "queries":
+            columns = ["vector", "sparse_vector",  "filter", "top_k", "blob"]
+        else:
+            raise ValueError(f"Unsupported kind '{kind}' - must be one of (documents, queries)")
+        df = dataset.read(columns=columns).to_pandas()
+        # And drop any columns which all values are missing - e.g. not all
+        # datasets have sparse_values, but the parquet file may still have
+        # the (empty) column present.
+        df.dropna(axis='columns', how="all", inplace=True)
+        logging.debug(f"Loaded {len(df)} vectors of kind '{kind}'")
+        return df
+
+    def _upsert_from_dataframe(self, index):
+        """
+        Note: using PineconeGRPC.Index.upsert_from_dataframe() directly
+        results in intermittent failures against serverless indexes as
+        we can hit the request limit:
+            grpc._channel._MultiThreadedRendezvous: < _MultiThreadedRendezvous of RPC that terminated with:
+               status = StatusCode.RESOURCE_EXHAUSTED
+               details = "Too many requests. Please retry shortly"
+        I haven't observed this with the HTTP Pinecone.Index, however the
+        gRPC one is so much faster for bulk loads we really want to keep using
+        gRPC. As such, we have our own version of upsert from dataframe which
+        handles this error with backoff and retry.
+        """
+
+        # Solution is somewhat naive - simply chunk the dataframe into
+        # chunks of a smaller size, and pass each chunk to upsert_from_dataframe.
+        # We still end up with multiple vectors in progress at once, but we
+        # limit it to a finite amount and not the entire dataset.
+        def split_dataframe(df, batch_size):
+            for i in range(0, len(df), batch_size):
+                batch = df.iloc[i: i + batch_size]
+                yield batch
+
+        pbar = tqdm(desc="Populating index", unit=" vectors", total=len(self.documents))
+        upserted_count = 0
+        for sub_frame in split_dataframe(self.documents, 10000):
+            resp = index.upsert_from_dataframe(sub_frame,
+                                               batch_size=200,
+                                               show_progress=False)
+            upserted_count += resp.upserted_count
+            pbar.update(len(sub_frame))
+        return upserted_count
+
+
 class PineconeUser(User):
     def __init__(self, environment):
         super().__init__(environment)
@@ -110,16 +315,11 @@ class PineconeUser(User):
         else:
             raise Exception(f"Invalid pinecone_mode {self.mode}")
 
-    def randomQuery(self):
-        # Return random floats in the range [-1.0, 1.0], suitable
-        # for using as query vector for typical embedding data.
-        return ((np.random.random_sample(self.dimensions) * 2.0) - 1.0).tolist()
-
     @tag('query')
     @task
     def vectorQuery(self):
         self.client.query(name="Vector (Query only)",
-                          q_vector=self.randomQuery(), top_k=self.top_k)
+                          q_vector=self._query_vector(), top_k=self.top_k)
 
     @tag('fetch')
     @task
@@ -138,7 +338,7 @@ class PineconeUser(User):
     def vectorMetadataQuery(self):
         metadata = dict(color=random.choices(word_list))
         self.client.query(name="Vector + Metadata",
-                          q_vector=self.randomQuery(),
+                          q_vector=self._query_vector(),
                           top_k=self.top_k,
                           q_filter={"color": metadata['color'][0]})
 
@@ -146,7 +346,7 @@ class PineconeUser(User):
     @task
     def vectorNamespaceQuery(self):
         self.client.query(name="Vector + Namespace (namespace1)",
-                          q_vector=self.randomQuery(),
+                          q_vector=self._query_vector(),
                           top_k=self.top_k,
                           namespace="namespace1")
 
@@ -155,10 +355,20 @@ class PineconeUser(User):
     def vectorMetadataNamespaceQuery(self):
         metadata = dict(color=random.choices(word_list))
         self.client.query(name="Vector + Metadata + Namespace (namespace1)",
-                          q_vector=self.randomQuery(),
+                          q_vector=self._query_vector(),
                           top_k=self.top_k,
                           q_filter={"color": metadata['color'][0]},
                           namespace="namespace1")
+
+    def _query_vector(self):
+        """
+        Sample a random entry from the queries set (if non-empty), otherwise
+        generate a random query vector in the range [-1.0, 1.0].
+        """
+        if not self.environment.dataset.queries.empty:
+            record = self.environment.dataset.queries.sample(n=1).iloc[0]
+            return record['vector'].tolist()
+        return ((np.random.random_sample(self.dimensions) * 2.0) - 1.0).tolist()
 
 
 class PineconeRest(FastHttpUser):
