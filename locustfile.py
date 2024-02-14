@@ -75,7 +75,23 @@ def _(parser):
 
 
 @events.init.add_listener
-def check_for_dataset(environment: Environment, **kwargs):
+def on_locust_init(environment, **_kwargs):
+    if not isinstance(environment.runner, WorkerRunner):
+        # For Worker runners dataset setup is deferred until the test starts,
+        # to avoid multiple processes trying to downlaod at the same time.
+        setup_dataset(environment)
+
+
+def setup_dataset(environment: Environment, skip_download_and_populate: bool = False):
+    """
+    Sets up the dataset specified via the --pinecone_dataset argument:
+     - downloads it if not already present in local cache
+     - reads 'documents' data (if needed for population)
+     - reads 'queries' data if present.
+     - populates the index with the documents data (if requested).
+    The Dataset is assigned to `environment.dataset` for later use by Users
+    making requests.
+    """
     dataset_name = environment.parsed_options.pinecone_dataset
     if not dataset_name:
         environment.dataset = Dataset()
@@ -93,13 +109,23 @@ def check_for_dataset(environment: Environment, **kwargs):
         sys.exit(1)
 
     environment.dataset = Dataset(dataset_name, environment.parsed_options.pinecone_dataset_cache)
-    environment.dataset.load()
+    environment.dataset.load(skip_download=skip_download_and_populate)
     populate = environment.parsed_options.pinecone_populate_index
-    if populate != "never":
+    if not skip_download_and_populate and populate != "never":
         logging.info(
             f"Populating index {environment.host} with {len(environment.dataset.documents)} vectors from dataset '{dataset_name}'")
         environment.dataset.upsert_into_index(environment.host,
                                               skip_if_count_identical=(populate == "if-count-mismatch"))
+
+
+@events.test_start.add_listener
+def setup_worker_dataset(environment, **_kwargs):
+    # happens only once in headless runs, but can happen multiple times in web ui-runs
+    # in a distributed run, the master does not typically need any test data
+    if isinstance(environment.runner, WorkerRunner):
+        # Make the Dataset available for WorkerRunners (non-Worker will have
+        # already setup the dataset via on_locust_init).
+        setup_dataset(environment, skip_download_and_populate=True)
 
 
 @events.test_start.add_listener
@@ -168,11 +194,12 @@ class Dataset:
             datasets.append(json.loads(m.download_as_string()))
         return datasets
 
-    def load(self):
+    def load(self, skip_download: bool = False):
         """
         Load the dataset, populating the 'documents' and 'queries' DataFrames.
         """
-        self._download_dataset_files()
+        if not skip_download:
+            self._download_dataset_files()
 
         # Load all the parquet dataset (made up of one or more parquet files),
         # to use for documents into a pandas dataframe.
