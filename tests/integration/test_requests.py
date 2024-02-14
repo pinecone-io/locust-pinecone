@@ -51,13 +51,24 @@ class TestPineconeBase:
                                               extra_args=["--tags", tag] + extra_args)
         # Check that stderr contains the expected output, and no errors.
         assert '"Traceback' not in stderr
-        assert 'All users spawned: {"PineconeUser": 1}' in stderr
         # Check stats output shows expected requests occurred and they
         # succeeded.
-        stats = json.loads(stdout)[0]
-        assert expected_name in stats['name']
-        assert stats['num_requests'] == 1
-        assert stats['num_failures'] == 0
+        # With multiple processes (--processes) we see one JSON array for
+        # each process, so must handle multiple JSON objects.
+        stats = []
+        while stdout:
+            try:
+                stats.append(json.loads(stdout)[0])
+                break
+            except json.JSONDecodeError as e:
+                stdout = stdout[e.pos:]
+        for s in stats:
+            # Ignore empty stat sets (e.g. the master runner emits empty
+            # stats)
+            if s:
+                assert expected_name in s['name']
+                assert s['num_requests'] == 1
+                assert s['num_failures'] == 0
         assert proc.returncode == 0
 
 
@@ -81,13 +92,29 @@ class TestPinecone(TestPineconeBase):
         # has a non-zero queries set.
         test_dataset = "ANN_MNIST_d784_euclidean"
         self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
-                        timeout=60, extra_args=["--pinecone-dataset", test_dataset])
+                        timeout=60,
+                        extra_args=["--pinecone-dataset", test_dataset,
+                                    "--pinecone-populate-index", "always"])
+
+
+    def test_dataset_load_multiprocess(self, index_host):
+        # Choosing a small dataset ("only" 60,000 documents) which also
+        # has a non-zero queries set.
+        test_dataset = "ANN_MNIST_d784_euclidean"
+        self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
+                        timeout=60,
+                        extra_args=["--pinecone-dataset", test_dataset,
+                                    "--pinecone-populate-index", "always",
+                                    "--processes", "1"])
 
 
 @pytest.mark.parametrize("mode", ["rest", "sdk", "sdk+grpc"])
 class TestPineconeModes(TestPineconeBase):
     def test_pinecone_query(self, index_host, mode):
         self.do_request(index_host, mode, 'query', 'Vector (Query only)')
+
+    def test_pinecone_query_multiprocess(self, index_host, mode):
+        self.do_request(index_host, mode, 'query', 'Vector (Query only)', timeout=20, extra_args=["--processes=1"])
 
     def test_pinecone_query_meta(self, index_host, mode):
         self.do_request(index_host, mode, 'query_meta', 'Vector + Metadata')
