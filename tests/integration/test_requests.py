@@ -102,9 +102,10 @@ class TestPinecone(TestPineconeBase):
         assert proc.returncode == 1
 
     def test_dataset_load(self, index_host):
-        # Choosing a small dataset ("only" 60,000 documents) which also
-        # has a non-zero queries set.
-        test_dataset = "ANN_MNIST_d784_euclidean"
+        # Choosing a small dataset ("only" 100,000 documents) which
+        # also has a non-zero queries set (and same dimensions as
+        # other datasets used in the suite).
+        test_dataset = "quora_all-MiniLM-L6-bm25-100K"
         self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
                         timeout=60,
                         extra_args=["--pinecone-dataset", test_dataset,
@@ -112,14 +113,25 @@ class TestPinecone(TestPineconeBase):
 
 
     def test_dataset_load_multiprocess(self, index_host):
-        # Choosing a small dataset ("only" 60,000 documents) which also
-        # has a non-zero queries set.
-        test_dataset = "ANN_MNIST_d784_euclidean"
+        # Choosing a small dataset ("only" 100,000 documents) which
+        # also has a non-zero queries set (and same dimensions as
+        # other datasets used in the suite).
+        test_dataset = "quora_all-MiniLM-L6-bm25-100K"
         self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
                         timeout=60,
                         extra_args=["--pinecone-dataset", test_dataset,
                                     "--pinecone-populate-index", "always",
                                     "--processes", "1"])
+
+
+    def test_dataset_load_empty_queries(self, index_host):
+        # Choosing a dataset which has zero queries set, so we must generate query
+        # vectors from the documents set
+        test_dataset = "amazon_toys_quora_all-MiniLM-L6-bm25"
+        self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
+                        timeout=60,
+                        extra_args=["--pinecone-dataset", test_dataset,
+                                    "--pinecone-populate-index", "always"])
 
 
 @pytest.mark.parametrize("mode", ["rest", "sdk", "sdk+grpc"])
