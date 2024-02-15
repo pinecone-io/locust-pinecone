@@ -132,7 +132,7 @@ def setup_dataset(environment: Environment, skip_download_and_populate: bool = F
         print()
         sys.exit(1)
 
-    logging.info(f"Loading Dataset {dataset_name} into memory for Worker...")
+    logging.info(f"Loading Dataset {dataset_name} into memory for Worker {os.getpid()}...")
     environment.dataset = Dataset(dataset_name, environment.parsed_options.pinecone_dataset_cache)
     ignore_queries = environment.parsed_options.pinecone_dataset_ignore_queries
     environment.dataset.load(skip_download=skip_download_and_populate, load_queries=not ignore_queries)
@@ -142,6 +142,10 @@ def setup_dataset(environment: Environment, skip_download_and_populate: bool = F
             f"Populating index {environment.host} with {len(environment.dataset.documents)} vectors from dataset '{dataset_name}'")
         environment.dataset.upsert_into_index(environment.host,
                                               skip_if_count_identical=(populate == "if-count-mismatch"))
+    # We no longer need documents - if we were populating then that is
+    # finished, and if not populating then we don't need documents for
+    # anything else.
+    environment.dataset.prune_documents()
 
 
 @events.test_start.add_listener
@@ -297,6 +301,14 @@ class Dataset:
             logging.warning(
                 f"Not all records upserted successfully. Dataset count:{len(self.documents)},"
                 f" upserted count:{upserted_count}")
+
+    def prune_documents(self):
+        """
+        Discard the contents of self.documents once it is no longer required
+        (it can consume a significant amount of memory).
+        """
+        del self.documents
+        logging.debug(f"After pruning, 'queries' memory usage:{self.queries.memory_usage()}")
 
     def _download_dataset_files(self):
         self.cache.mkdir(parents=True, exist_ok=True)
