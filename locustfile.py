@@ -20,6 +20,7 @@ import os
 from pinecone import Pinecone
 from pinecone.grpc import PineconeGRPC
 import tempfile
+import tabulate
 from tqdm import tqdm, trange
 import sys
 
@@ -50,9 +51,10 @@ def _(parser):
                                  "'rest': Pinecone REST API (via a normal HTTP client). "
                                  "'sdk': Pinecone Python SDK ('pinecone-client'). "
                                  "'sdk+grpc': Pinecone Python SDK using gRPC as the underlying transport.")
-    pc_options.add_argument("--pinecone-dataset", type=str, metavar="<dataset_name> | 'help'", default=None,
+    pc_options.add_argument("--pinecone-dataset", type=str, metavar="<dataset_name> | 'list' | 'list-details'", default=None,
                             help="The dataset to use for index population and/or query generation. "
-                                 "Pass the value 'help' to list available datasets.")
+                                 "Pass the value 'list' to list available datasets, or pass 'list-details' to"
+                                 " list full details of available datasets.")
     pc_options.add_argument("--pinecone-populate-index", choices=["always", "never", "if-count-mismatch"],
                             default="if-count-mismatch",
                             help="Should the index be populated with the dataset before issuing requests. Choices: "
@@ -96,15 +98,22 @@ def setup_dataset(environment: Environment, skip_download_and_populate: bool = F
     if not dataset_name:
         environment.dataset = Dataset()
         return
-    if dataset_name == "help":
+    if dataset_name in ("list", "list-details"):
         # Print out the list of available datasets, then exit.
         print("Fetching list of available datasets for --pinecone-dataset...")
         available = Dataset.list()
-        # Copy the 'dimensions' model field from 'dense_model' into the top level
-        for a in available:
-            a['dimension'] = a['dense_model']['dimension']
-        df = pandas.DataFrame(available, columns=['name', 'documents', 'queries', 'dimension'])
-        print(df.to_markdown(index=False, headers=["Name", "Documents", "Queries", "Dimension"], tablefmt="simple"))
+        if dataset_name == "list":
+            # Discard the more detailed fields before printing, however
+            # copy the 'dimensions' model field from 'dense_model' into the top
+            # level as that's a key piece of information (needed to create an
+            # index).
+            brief = []
+            for a in available:
+                a['dimension'] = a['dense_model']['dimension']
+                summary = {key.capitalize(): a[key] for key in ['name', 'documents', 'queries', 'dimension']}
+                brief.append(summary)
+            available = brief
+        print(tabulate.tabulate(available, headers="keys", tablefmt="simple"))
         print()
         sys.exit(1)
 

@@ -78,13 +78,27 @@ class TestPinecone(TestPineconeBase):
         (proc, stdout, stderr) = spawn_locust(host="unused",
                                               mode="rest",
                                               timeout=20,
-                                              extra_args=["--pinecone-dataset=help"])
+                                              extra_args=["--pinecone-dataset=list"])
         # Check that stdout contains a list of datasets (don't want to hardcode
         # complete set as that just makes the test brittle if any new datasets are added).
         for dataset in ["ANN_MNIST_d784_euclidean                            60000      10000          784",
                         "langchain-python-docs-text-embedding-ada-002         3476          0         1536",
                         "quora_all-MiniLM-L6-bm25-100K                      100000      15000          384"]:
             assert dataset in stdout
+        assert proc.returncode == 1
+
+    def test_datasets_list_details(self):
+        # Extend timeout for listing datasets, can take longer than default 4s.
+        (proc, stdout, stderr) = spawn_locust(host="unused",
+                                              mode="rest",
+                                              timeout=20,
+                                              extra_args=["--pinecone-dataset=list-details"])
+        # Check that stdout contains at least a couple of details from the datasets (don't want to hardcode
+        # complete set as that just makes the test brittle if any new datasets are added).
+        for detail in ["gs://pinecone-datasets-dev/ANN_DEEP1B_d96_angular",
+                        "https://github.com/erikbern/ann-benchmarks",
+                        "sentence-transformers/all-MiniLM-L6-v2"]:
+            assert detail in stdout
         assert proc.returncode == 1
 
     def test_dataset_load(self, index_host):
