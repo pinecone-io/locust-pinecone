@@ -29,10 +29,10 @@ def spawn_locust(host, mode, timeout, extra_args=[]):
     except subprocess.TimeoutExpired as e:
         # Echo whatever stdout / stderr we got so far, to aid in debugging
         if e.stdout:
-            for line in e.stdout.decode(errors='replace'):
+            for line in e.stdout.decode(errors='replace').splitlines():
                 print(line)
-        if e.stdout:
-            for line in e.stderr.decode(errors='replace'):
+        if e.stderr:
+            for line in e.stderr.decode(errors='replace').splitlines():
                 print(line, file=sys.stderr)
         raise
     # Echo locust's stdout & stderr to our own, so pytest can capture and
