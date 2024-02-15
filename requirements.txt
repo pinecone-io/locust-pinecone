@@ -24,7 +24,7 @@ MarkupSafe==2.1.1
 msgpack==1.0.4
 numpy==1.23.5
 pandas==2.2.0
-pinecone-client[grpc]==3.0.2
+pinecone-client[grpc]==3.0.3
 pinecone-datasets==0.7.0
 protobuf==3.20.3
 psutil==5.9.4
