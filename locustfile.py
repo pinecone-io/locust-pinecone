@@ -117,6 +117,7 @@ def setup_dataset(environment: Environment, skip_download_and_populate: bool = F
         print()
         sys.exit(1)
 
+    logging.info(f"Loading Dataset {dataset_name} into memory for Worker...")
     environment.dataset = Dataset(dataset_name, environment.parsed_options.pinecone_dataset_cache)
     environment.dataset.load(skip_download=skip_download_and_populate)
     populate = environment.parsed_options.pinecone_populate_index
@@ -134,7 +135,16 @@ def setup_worker_dataset(environment, **_kwargs):
     if isinstance(environment.runner, WorkerRunner):
         # Make the Dataset available for WorkerRunners (non-Worker will have
         # already setup the dataset via on_locust_init).
-        setup_dataset(environment, skip_download_and_populate=True)
+        #
+        # We need to perform this work in a background thread (not in
+        # the current gevent greenlet) as otherwise we block the
+        # current greenlet (pandas data loading is not
+        # gevent-friendly) and locust's master / worker heartbeating
+        # thinks the worker has gone missing and can terminate it.
+        pool = gevent.get_hub().threadpool
+        environment.setup_dataset_greenlet = pool.apply_async(setup_dataset,
+                                                              kwds={'environment':environment,
+                                                                    'skip_download_and_populate':True})
 
 
 @events.test_start.add_listener
@@ -355,6 +365,10 @@ class PineconeUser(User):
             self.client = PineconeSdk(self.environment, use_grpc=True)
         else:
             raise Exception(f"Invalid pinecone_mode {self.mode}")
+
+        if isinstance(self.environment.runner, WorkerRunner):
+            # Wait until the datset has been loaded for this environment (Runner)
+            environment.setup_dataset_greenlet.join()
 
     @tag('query')
     @task
