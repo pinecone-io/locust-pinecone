@@ -239,6 +239,11 @@ class Dataset:
         client = Client.create_anonymous_client()
         bucket: Bucket = client.bucket(Dataset.gcs_bucket)
         blobs = [b for b in bucket.list_blobs(prefix=self.name + "/")]
+        # Ignore directories (blobs ending in '/') as we don't explicilty need them
+        # (non-empty directories will have their files downloaded
+        # anyway).
+        blobs = [b for b in blobs if not b.name.endswith("/")]
+        logging.debug(f"Dataset consists of files:{[b.name for b in blobs]}")
 
         def should_download(blob):
             path = self.cache / blob.name
