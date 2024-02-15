@@ -234,7 +234,16 @@ class Dataset:
             self.queries = self._load_parquet_dataset("queries")
         if self.queries.empty:
             logging.debug("Using complete documents dataset for query data")
-            self.queries = self.documents
+            # Queries expect a different schema than documents.
+            # Documents looks like:
+            #    ["id", "values", "sparse_values", "metadata"]
+            # Queries looks like:
+            #    ["vector", "sparse_vector", "filter", "top_k"]
+            #
+            # Extract 'values' and rename to query schema (only
+            # 'vector' field of queries is currently used).
+            self.queries = self.documents[["values"]].copy()
+            self.queries.rename(columns={"values": "vector"}, inplace=True)
 
     def upsert_into_index(self, index_host, skip_if_count_identical: bool = False):
         """
