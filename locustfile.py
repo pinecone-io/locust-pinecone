@@ -299,8 +299,10 @@ class Dataset:
         # Read only the columns that Pinecone SDK makes use of.
         if kind == "documents":
             columns = ["id", "values", "sparse_values", "metadata"]
+            metadata_column = "metadata"
         elif kind == "queries":
             columns = ["vector", "sparse_vector",  "filter", "top_k", "blob"]
+            metadata_column = "filter"
         else:
             raise ValueError(f"Unsupported kind '{kind}' - must be one of (documents, queries)")
         df = dataset.read(columns=columns).to_pandas()
@@ -308,6 +310,31 @@ class Dataset:
         # datasets have sparse_values, but the parquet file may still have
         # the (empty) column present.
         df.dropna(axis='columns', how="all", inplace=True)
+
+        if metadata_column in df:
+            def cleanup_null_values(metadata):
+                # Null metadata values are not supported, remove any key
+                # will a null value.
+                if not metadata:
+                    return None
+                return {k: v for k, v in metadata.items() if v}
+
+            def convert_metadata_to_dict(metadata) -> dict:
+                # metadata is expected to be a dictionary of key-value pairs;
+                # however it may be encoded as a JSON string in which case we
+                # need to convert it.
+                if metadata is None:
+                    return None
+                if isinstance(metadata, dict):
+                    return metadata
+                if isinstance(metadata, str):
+                    return json.loads(metadata)
+                raise TypeError(f"metadata must be a string or dict (found {type(metadata)})")
+
+            def prepare_metadata(metadata):
+                return cleanup_null_values(convert_metadata_to_dict(metadata))
+
+            df[metadata_column] = df[metadata_column].apply(prepare_metadata)
         logging.debug(f"Loaded {len(df)} vectors of kind '{kind}'")
         return df
 
