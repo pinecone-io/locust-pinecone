@@ -1,3 +1,4 @@
+import argparse
 import pathlib
 import random
 import time
@@ -55,6 +56,8 @@ def _(parser):
                             help="The dataset to use for index population and/or query generation. "
                                  "Pass the value 'list' to list available datasets, or pass 'list-details' to"
                                  " list full details of available datasets.")
+    pc_options.add_argument("--pinecone-dataset-ignore-queries", action=argparse.BooleanOptionalAction,
+                            help="Ignore and do not load the 'queries' table from the specified dataset.")
     pc_options.add_argument("--pinecone-populate-index", choices=["always", "never", "if-count-mismatch"],
                             default="if-count-mismatch",
                             help="Should the index be populated with the dataset before issuing requests. Choices: "
@@ -119,7 +122,8 @@ def setup_dataset(environment: Environment, skip_download_and_populate: bool = F
 
     logging.info(f"Loading Dataset {dataset_name} into memory for Worker...")
     environment.dataset = Dataset(dataset_name, environment.parsed_options.pinecone_dataset_cache)
-    environment.dataset.load(skip_download=skip_download_and_populate)
+    ignore_queries = environment.parsed_options.pinecone_dataset_ignore_queries
+    environment.dataset.load(skip_download=skip_download_and_populate, load_queries=not ignore_queries)
     populate = environment.parsed_options.pinecone_populate_index
     if not skip_download_and_populate and populate != "never":
         logging.info(
@@ -213,7 +217,7 @@ class Dataset:
             datasets.append(json.loads(m.download_as_string()))
         return datasets
 
-    def load(self, skip_download: bool = False):
+    def load(self, skip_download: bool = False, load_queries: bool = True):
         """
         Load the dataset, populating the 'documents' and 'queries' DataFrames.
         """
@@ -226,10 +230,20 @@ class Dataset:
 
         # If there is an explicit 'queries' dataset, then load that and use
         # for querying, otherwise use documents directly.
-        self.queries = self._load_parquet_dataset("queries")
+        if load_queries:
+            self.queries = self._load_parquet_dataset("queries")
         if self.queries.empty:
             logging.debug("Using complete documents dataset for query data")
-            self.queries = self.documents
+            # Queries expect a different schema than documents.
+            # Documents looks like:
+            #    ["id", "values", "sparse_values", "metadata"]
+            # Queries looks like:
+            #    ["vector", "sparse_vector", "filter", "top_k"]
+            #
+            # Extract 'values' and rename to query schema (only
+            # 'vector' field of queries is currently used).
+            self.queries = self.documents[["values"]].copy()
+            self.queries.rename(columns={"values": "vector"}, inplace=True)
 
     def upsert_into_index(self, index_host, skip_if_count_identical: bool = False):
         """

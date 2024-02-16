@@ -122,6 +122,17 @@ class TestPinecone(TestPineconeBase):
                                     "--processes", "1"])
 
 
+    def test_dataset_load_empty_queries(self, index_host):
+        # Don't load the queries set, so we test generating queries from
+        # documents.
+        test_dataset = "ANN_MNIST_d784_euclidean"
+        self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
+                        timeout=60,
+                        extra_args=["--pinecone-dataset", test_dataset,
+                                    "--pinecone-populate-index", "always",
+                                    "--pinecone-dataset-ignore-queries"])
+
+
 @pytest.mark.parametrize("mode", ["rest", "sdk", "sdk+grpc"])
 class TestPineconeModes(TestPineconeBase):
     def test_pinecone_query(self, index_host, mode):
