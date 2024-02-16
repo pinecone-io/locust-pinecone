@@ -127,11 +127,12 @@ class TestPinecone(TestPineconeBase):
     def test_dataset_load_empty_queries(self, index_host):
         # Choosing a dataset which has zero queries set, so we must generate query
         # vectors from the documents set
-        test_dataset = "amazon_toys_quora_all-MiniLM-L6-bm25"
+        test_dataset = "langchain-python-docs-text-embedding-ada-002"
         self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
                         timeout=60,
                         extra_args=["--pinecone-dataset", test_dataset,
-                                    "--pinecone-populate-index", "always"])
+                                    "--pinecone-populate-index", "always",
+                                    "--pinecone-dataset-dimension-match-index=yes"])
 
 
 @pytest.mark.parametrize("mode", ["rest", "sdk", "sdk+grpc"])

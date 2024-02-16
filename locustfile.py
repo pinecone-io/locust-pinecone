@@ -55,6 +55,9 @@ def _(parser):
                             help="The dataset to use for index population and/or query generation. "
                                  "Pass the value 'list' to list available datasets, or pass 'list-details' to"
                                  " list full details of available datasets.")
+    pc_options.add_argument("--pinecone-dataset-dimension-match-index", type=bool,
+                            default=None,
+                            help="Modify the dimensions of the dataset to match the index. Can be used to load data into an index which has different dimensionality.")
     pc_options.add_argument("--pinecone-populate-index", choices=["always", "never", "if-count-mismatch"],
                             default="if-count-mismatch",
                             help="Should the index be populated with the dataset before issuing requests. Choices: "
@@ -118,6 +121,7 @@ def setup_dataset(environment: Environment, skip_download_and_populate: bool = F
         sys.exit(1)
 
     logging.info(f"Loading Dataset {dataset_name} into memory for Worker...")
+    resize_to_index = environment.parsed_options.pinecone_dataset_dimension_match_index
     environment.dataset = Dataset(dataset_name, environment.parsed_options.pinecone_dataset_cache)
     environment.dataset.load(skip_download=skip_download_and_populate)
     populate = environment.parsed_options.pinecone_populate_index
@@ -125,7 +129,8 @@ def setup_dataset(environment: Environment, skip_download_and_populate: bool = F
         logging.info(
             f"Populating index {environment.host} with {len(environment.dataset.documents)} vectors from dataset '{dataset_name}'")
         environment.dataset.upsert_into_index(environment.host,
-                                              skip_if_count_identical=(populate == "if-count-mismatch"))
+                                              skip_if_count_identical=(populate == "if-count-mismatch"),
+                                              resize_to_index=resize_to_index)
 
 
 @events.test_start.add_listener
@@ -240,7 +245,7 @@ class Dataset:
             self.queries = self.documents[["values"]].copy()
             self.queries.rename(columns={"values": "vector"}, inplace=True)
 
-    def upsert_into_index(self, index_host, skip_if_count_identical: bool = False):
+    def upsert_into_index(self, index_host, skip_if_count_identical: bool = False, resize_to_index: bool = False):
         """
         Upsert the datasets' documents into the specified index.
         :param index_host: Pinecone index to upsert into (must already exist)
@@ -249,11 +254,15 @@ class Dataset:
         """
         pinecone = PineconeGRPC(apikey)
         index = pinecone.Index(host=index_host)
+        index_stats = index.describe_index_stats()
         if skip_if_count_identical:
-            if index.describe_index_stats()['total_vector_count'] == len(self.documents):
+            if index_stats['total_vector_count'] == len(self.documents):
                 logging.info(
                     f"Skipping upsert as index already has same number of documents as dataset ({len(self.documents)}")
                 return
+
+        if resize_to_index:
+            self.documents['values'].transform(lambda x: x.resize(index_stats["dimension"]))
 
         upserted_count = self._upsert_from_dataframe(index)
         if upserted_count != len(self.documents):
