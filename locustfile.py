@@ -20,6 +20,7 @@ from pyarrow.parquet import ParquetDataset
 import os
 from pinecone import Pinecone
 from pinecone.grpc import PineconeGRPC
+import psutil
 import tempfile
 import tabulate
 from tqdm import tqdm, trange
@@ -38,6 +39,17 @@ word_list = [x.strip() for x in open(colornames_file, "r")]
 includeMetadataValue = True
 includeValuesValue = False
 apikey = os.environ['PINECONE_API_KEY']
+
+# Configure pyarrow's embedded jemalloc library to immediately return
+# deallocted memory back to the OS.
+# (We only use pyarrow to load the dataset's Parquet files into
+# pandas.DateFrames, which requires ~1GB RAM per 100k ~1000 dimension
+# vectors; with the default setting pyarrow can hold this memory
+# resident for extended periods after we have finished with the
+# associated DataFrame, resulting in excessive process RSS,
+# particulary with high process counts).
+import pyarrow
+pyarrow.jemalloc_set_decay_ms(0)
 
 
 @events.init_command_line_parser.add_listener
@@ -184,6 +196,26 @@ def set_up_iteration_limit(environment: Environment, **kwargs):
         # monkey patch TaskSets to add support for iterations limit. Not ugly at all :)
         TaskSet.execute_task = iteration_limit_wrapper(TaskSet.execute_task)
         DefaultTaskSet.execute_task = iteration_limit_wrapper(DefaultTaskSet.execute_task)
+
+
+@events.test_stop.add_listener
+def on_stop_mem_usage(**kwargs):
+    print_mem_usage("On test stop")
+
+
+def print_mem_usage(label=""):
+    if label:
+        label = " - " + label
+    process = psutil.Process()
+    info = process.memory_info()
+
+    def mb(b):
+        return f"{int(b / 1024 / 1024)}MB"
+
+    arrow_alloc = pyarrow.total_allocated_bytes()
+    logging.debug(f"Memory usage for pid:{process.pid} RSS:{mb(info.rss)} "
+                  f"VSZ:{mb(info.vms)} "
+                  f"pyarrow.allocated:{mb(arrow_alloc)}{label}")
 
 
 class Dataset:
