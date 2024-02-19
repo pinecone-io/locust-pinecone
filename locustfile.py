@@ -441,7 +441,16 @@ class Dataset:
         pbar = tqdm(desc="Populating index", unit=" vectors", total=len(self.documents))
         upserted_count = 0
         for sub_frame in split_dataframe(self.documents, 10000):
-            resp = index.upsert_from_dataframe(sub_frame,
+            # The 'values' column in the DataFrame is a pyarrow type (list<item: double>[pyarrow])
+            # as it was read using the pandas.ArrowDtype types_mapper (see _load_parquet_dataset).
+            # This _can_ be automatically converted to a Python list object inside upsert_from_dataframe,
+            # but it is slow, as at that level the DataFrame is iterated row-by-row and the conversion
+            # happens one element at a time.
+            # However, converting the entire sub-frame's column back to a Python object before calling
+            # upsert_from_dataframe() is significantly faster, such that the overall upsert throughput
+            # (including the actual server-side work) is around 2x greater if we pre-convert.
+            converted = sub_frame.astype(dtype={'values': object})
+            resp = index.upsert_from_dataframe(converted,
                                                batch_size=200,
                                                show_progress=False)
             upserted_count += resp.upserted_count
