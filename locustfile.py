@@ -70,6 +70,10 @@ def _(parser):
                                  " list full details of available datasets.")
     pc_options.add_argument("--pinecone-dataset-ignore-queries", action=argparse.BooleanOptionalAction,
                             help="Ignore and do not load the 'queries' table from the specified dataset.")
+    pc_options.add_argument("--pinecone-dataset-docs-sample-for-query", type=float, default=0.01,
+                            metavar="<fraction> (0.0 - 1.0)",
+                            help="Specify the fraction of docs which should be sampled when the documents vectorset "
+                                 "is used for queries (default: %(default)s).")
     pc_options.add_argument("--pinecone-populate-index", choices=["always", "never", "if-count-mismatch"],
                             default="if-count-mismatch",
                             help="Should the index be populated with the dataset before issuing requests. Choices: "
@@ -135,7 +139,10 @@ def setup_dataset(environment: Environment, skip_download_and_populate: bool = F
     logging.info(f"Loading Dataset {dataset_name} into memory for Worker {os.getpid()}...")
     environment.dataset = Dataset(dataset_name, environment.parsed_options.pinecone_dataset_cache)
     ignore_queries = environment.parsed_options.pinecone_dataset_ignore_queries
-    environment.dataset.load(skip_download=skip_download_and_populate, load_queries=not ignore_queries)
+    sample_ratio = environment.parsed_options.pinecone_dataset_docs_sample_for_query
+    environment.dataset.load(skip_download=skip_download_and_populate,
+                             load_queries=not ignore_queries,
+                             doc_sample_fraction=sample_ratio)
     populate = environment.parsed_options.pinecone_populate_index
     if not skip_download_and_populate and populate != "never":
         logging.info(
@@ -253,7 +260,8 @@ class Dataset:
             datasets.append(json.loads(m.download_as_string()))
         return datasets
 
-    def load(self, skip_download: bool = False, load_queries: bool = True):
+    def load(self, skip_download: bool = False, load_queries: bool = True,
+             doc_sample_fraction: float = 1.0):
         """
         Load the dataset, populating the 'documents' and 'queries' DataFrames.
         """
@@ -280,6 +288,11 @@ class Dataset:
             # 'vector' field of queries is currently used).
             self.queries = self.documents[["values"]].copy()
             self.queries.rename(columns={"values": "vector"}, inplace=True)
+
+            # Use a sampling of documents for queries (to avoid
+            # keeping a large complete dataset in memory for each
+            # worker process).
+            self.queries = self.queries.sample(frac=doc_sample_fraction, random_state=1)
 
     def upsert_into_index(self, index_host, skip_if_count_identical: bool = False):
         """
@@ -363,7 +376,13 @@ class Dataset:
             metadata_column = "filter"
         else:
             raise ValueError(f"Unsupported kind '{kind}' - must be one of (documents, queries)")
-        df = dataset.read(columns=columns).to_pandas()
+        # Note: We to specify pandas.ArrowDtype as the types mapper to use pyarrow datatypes in the
+        # resulting DataFrame. This is significant as (for reasons unknown) it allows subsequent
+        # samples() of the DataFrame to be "disconnected" from the original underlying pyarrow data,
+        # and hence significantly reduces memory usage when we later prune away the underlying
+        # parrow data (see prune_documents).
+        df = dataset.read(columns=columns).to_pandas(types_mapper=pandas.ArrowDtype)
+
         # And drop any columns which all values are missing - e.g. not all
         # datasets have sparse_values, but the parquet file may still have
         # the (empty) column present.
@@ -507,7 +526,7 @@ class PineconeUser(User):
         """
         if not self.environment.dataset.queries.empty:
             record = self.environment.dataset.queries.sample(n=1).iloc[0]
-            return record['vector'].tolist()
+            return record['vector']
         return ((np.random.random_sample(self.dimensions) * 2.0) - 1.0).tolist()
 
 
