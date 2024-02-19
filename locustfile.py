@@ -59,7 +59,7 @@ def _(parser):
                             help=("Number of results to return from a Pinecone "
                                   "query() request. Defaults to 10."))
     pc_options.add_argument("--pinecone-mode", choices=["rest", "sdk", "sdk+grpc"],
-                            default="rest",
+                            default="sdk+grpc",
                             help="How to connect to the Pinecone index (default: %(default)s). Choices: "
                                  "'rest': Pinecone REST API (via a normal HTTP client). "
                                  "'sdk': Pinecone Python SDK ('pinecone-client'). "
