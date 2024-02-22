@@ -71,6 +71,8 @@ def _(parser):
                                  " list full details of available datasets.")
     pc_options.add_argument("--pinecone-dataset-ignore-queries", action=argparse.BooleanOptionalAction,
                             help="Ignore and do not load the 'queries' table from the specified dataset.")
+    pc_options.add_argument("--pinecone-dataset-limit", type=int, default=0,
+                            help="If non-zero, limit the dataset to the first N vectors.")
     pc_options.add_argument("--pinecone-dataset-docs-sample-for-query", type=float, default=0.01,
                             metavar="<fraction> (0.0 - 1.0)",
                             help="Specify the fraction of docs which should be sampled when the documents vectorset "
@@ -141,8 +143,10 @@ def setup_dataset(environment: Environment, skip_download_and_populate: bool = F
     environment.dataset = Dataset(dataset_name, environment.parsed_options.pinecone_dataset_cache)
     ignore_queries = environment.parsed_options.pinecone_dataset_ignore_queries
     sample_ratio = environment.parsed_options.pinecone_dataset_docs_sample_for_query
+    limit = environment.parsed_options.pinecone_dataset_limit
     environment.dataset.load(skip_download=skip_download_and_populate,
                              load_queries=not ignore_queries,
+                             limit=limit,
                              doc_sample_fraction=sample_ratio)
     populate = environment.parsed_options.pinecone_populate_index
     if not skip_download_and_populate and populate != "never":

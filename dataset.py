@@ -46,6 +46,7 @@ class Dataset:
         return datasets
 
     def load(self, skip_download: bool = False, load_queries: bool = True,
+             limit: int = 0,
              doc_sample_fraction: float = 1.0):
         """
         Load the dataset, populating the 'documents' and 'queries' DataFrames.
@@ -53,9 +54,9 @@ class Dataset:
         if not skip_download:
             self._download_dataset_files()
 
-        # Load all the parquet dataset (made up of one or more parquet files),
+        # Load the parquet dataset (made up of one or more parquet files),
         # to use for documents into a pandas dataframe.
-        self.documents = self._load_parquet_dataset("documents")
+        self.documents = self._load_parquet_dataset("documents", limit=limit)
 
         # If there is an explicit 'queries' dataset, then load that and use
         # for querying, otherwise use documents directly.
@@ -146,7 +147,7 @@ class Dataset:
             blob.download_to_filename(self.cache / blob.name)
             pbar.update(blob.size)
 
-    def _load_parquet_dataset(self, kind):
+    def _load_parquet_dataset(self, kind, limit=0):
         parquet_files = [f for f in (self.cache / self.name).glob(kind + '/*.parquet')]
         if not len(parquet_files):
             return pandas.DataFrame
@@ -167,6 +168,8 @@ class Dataset:
         # and hence significantly reduces memory usage when we later prune away the underlying
         # parrow data (see prune_documents).
         df = dataset.read(columns=columns).to_pandas(types_mapper=pandas.ArrowDtype)
+        if limit:
+            df = df.iloc[:limit]
 
         # And drop any columns which all values are missing - e.g. not all
         # datasets have sparse_values, but the parquet file may still have

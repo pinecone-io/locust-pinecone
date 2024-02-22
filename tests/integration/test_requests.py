@@ -104,12 +104,15 @@ class TestPinecone(TestPineconeBase):
     def test_dataset_load(self, index_host):
         # Choosing a small dataset ("only" 60,000 documents) which also
         # has a non-zero queries set.
+        # We also test the --pinecone-dataset-limit option here (which has the
+        # bonus effect of speeding up the test - note that complete
+        # dataset loading is tested in  test_dataset_load_multiprocess).
         test_dataset = "ANN_MNIST_d784_euclidean"
         self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
                         timeout=60,
                         extra_args=["--pinecone-dataset", test_dataset,
+                                    "--pinecone-dataset-limit", "123",
                                     "--pinecone-populate-index", "always"])
-
 
     def test_dataset_load_multiprocess(self, index_host):
         # Choosing a small dataset ("only" 60,000 documents) which also
