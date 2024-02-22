@@ -86,6 +86,8 @@ def _(parser):
                                  "'if-count-mismatch': Populate if the number of items in the index differs from the "
                                  "number of items in th dataset, otherwise skip population. "
                                  "(default: %(default)s).")
+    pc_options.add_argument("--pinecone-recall", action=argparse.BooleanOptionalAction,
+                            help="Report the Recall score (out of 100) instead of latency (reported on UI / console as 'latency'")
     pc_options.add_argument("--pinecone-dataset-cache", type=str, default=".dataset_cache",
                             help="Path to directory to cache downloaded datasets (default: %(default)s).")
     pc_options.add_argument("--pinecone-throughput-per-user", type=float, default=0,
@@ -265,6 +267,17 @@ class PineconeUser(User):
             # Wait until the datset has been loaded for this environment (Runner)
             environment.setup_dataset_greenlet.join()
 
+        # Check for compatibility between different options.
+        # --pinecone-recall can only be used if the query set contains the
+        # exact top-K vectors.
+        if environment.parsed_options.pinecone_recall:
+            query = self._query_vector()
+            if "blob" not in query or "nearest_neighbors" not in query["blob"]:
+                logging.error(
+                    "--pinecone-recall specified but query set does not "
+                    "contain nearest neighbours - cannot calculate Recall")
+                sys.exit(1)
+
     def wait_time(self):
         if self.target_throughput > 0:
             return constant_throughput(self.target_throughput)(self)
@@ -274,7 +287,7 @@ class PineconeUser(User):
     @task
     def vectorQuery(self):
         self.client.query(name="Vector (Query only)",
-                          q_vector=self._query_vector(), top_k=self.top_k)
+                          query=self._query_vector(), top_k=self.top_k)
 
     @tag('fetch')
     @task
@@ -293,7 +306,7 @@ class PineconeUser(User):
     def vectorMetadataQuery(self):
         metadata = dict(color=random.choices(word_list))
         self.client.query(name="Vector + Metadata",
-                          q_vector=self._query_vector(),
+                          query=self._query_vector(),
                           top_k=self.top_k,
                           q_filter={"color": metadata['color'][0]})
 
@@ -301,7 +314,7 @@ class PineconeUser(User):
     @task
     def vectorNamespaceQuery(self):
         self.client.query(name="Vector + Namespace (namespace1)",
-                          q_vector=self._query_vector(),
+                          query=self._query_vector(),
                           top_k=self.top_k,
                           namespace="namespace1")
 
@@ -310,7 +323,7 @@ class PineconeUser(User):
     def vectorMetadataNamespaceQuery(self):
         metadata = dict(color=random.choices(word_list))
         self.client.query(name="Vector + Metadata + Namespace (namespace1)",
-                          q_vector=self._query_vector(),
+                          query=self._query_vector(),
                           top_k=self.top_k,
                           q_filter={"color": metadata['color'][0]},
                           namespace="namespace1")
@@ -322,8 +335,10 @@ class PineconeUser(User):
         """
         if not self.environment.dataset.queries.empty:
             record = self.environment.dataset.queries.sample(n=1).iloc[0]
-            return record['vector']
-        return ((np.random.random_sample(self.dimensions) * 2.0) - 1.0).tolist()
+        else:
+            record = dict()
+            record["vector"] = ((np.random.random_sample(self.dimensions) * 2.0) - 1.0).tolist()
+        return record
 
 
 class PineconeRest(FastHttpUser):
@@ -339,8 +354,8 @@ class PineconeRest(FastHttpUser):
         self.host = environment.host
         super().__init__(environment)
 
-    def query(self, name: str, q_vector: list, top_k: int, q_filter=None, namespace=None):
-        json = {"vector": q_vector,
+    def query(self, name: str, query: dict, top_k: int, q_filter=None, namespace=None):
+        json = {"vector": query["vector"],
                 "topK": top_k,
                 "includeMetadata": includeMetadataValue,
                 "includeValues": includeValuesValue}
@@ -387,11 +402,11 @@ class PineconeSdk(User):
 
         self.index = self.pinecone.Index(host=self.host)
 
-    def query(self, name: str, q_vector: list, top_k: int, q_filter=None, namespace=None):
-        args = {'vector': q_vector,
-                  'top_k': top_k,
-                  'include_values': includeValuesValue,
-                  'include_metadata': includeValuesValue}
+    def query(self, name: str, query: dict, top_k: int, q_filter=None, namespace=None):
+        args = {'vector': query['vector'],
+                'top_k': top_k,
+                'include_values': includeValuesValue,
+                'include_metadata': includeValuesValue}
         if q_filter:
             args['filter'] = q_filter
         if namespace:
@@ -404,10 +419,18 @@ class PineconeSdk(User):
         response_time = (stop - start) * 1000.0
         match_count = len(result.matches)
 
+        if self.environment.parsed_options.pinecone_recall:
+            expected_neighbours = query['blob']['nearest_neighbors']
+            actual_neighbours = [r['id'] for r in result.matches]
+            recall_n = Dataset.recall(actual_neighbours, expected_neighbours)
+            metric = recall_n * 100
+        else:
+            metric = response_time
+
         events.request.fire(request_type=self.request_type,
                             name=name,
                             response_length=match_count,
-                            response_time=response_time)
+                            response_time=metric)
 
     def fetch(self, id : str):
         start = time.time()

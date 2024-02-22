@@ -135,6 +135,25 @@ class TestPinecone(TestPineconeBase):
                                     "--pinecone-populate-index", "always",
                                     "--pinecone-dataset-ignore-queries"])
 
+    def test_recall(self, index_host):
+        # Simple smoke-test for --pinecone-recall; check it is accepted
+        # and no errors occur.
+        test_dataset = "ANN_MNIST_d784_euclidean"
+        self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
+                        extra_args=["--pinecone-dataset", test_dataset,
+                                    "--pinecone-dataset-limit", "10",
+                                    "--pinecone-recall"])
+
+    def test_recall_requires_nearest_neighbours(self, index_host):
+        # --pinecone-recall is incompatible with a dataset without
+        # nearest-neighbour information in the query set - e.g. when not
+        # specifying a dataset.
+        (proc, _, stderr) = spawn_locust(host=index_host,
+                                         mode="sdk",
+                                         timeout=10,
+                                         extra_args=["--tags", "query", "--pinecone-recall"])
+        assert "cannot calculate Recall" in stderr
+        assert proc.returncode == 1
 
 @pytest.mark.parametrize("mode", ["rest", "sdk", "sdk+grpc"])
 class TestPineconeModes(TestPineconeBase):
