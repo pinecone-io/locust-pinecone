@@ -79,6 +79,11 @@ class Dataset:
             # worker process).
             self.queries = self.queries.sample(frac=doc_sample_fraction, random_state=1)
 
+            # Convert the vectors from pandas DataFrame to Python objects
+            # up-front as it's expensive to iterate on DataFrame (query
+            # sampling must iterate).
+            self.queries = self.queries.astype(dtype={'vector': object})
+
     def upsert_into_index(self, index_host, api_key, skip_if_count_identical: bool = False):
         """
         Upsert the datasets' documents into the specified index.
