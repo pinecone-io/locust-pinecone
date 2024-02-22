@@ -61,8 +61,10 @@ class Dataset:
         # for querying, otherwise use documents directly.
         if load_queries:
             self.queries = self._load_parquet_dataset("queries")
-        if self.queries.empty:
-            logging.debug("Using complete documents dataset for query data")
+        if not self.queries.empty:
+            logging.info(
+                f"Using {len(self.queries)} query vectors loaded from dataset 'queries' table")
+        else:
             # Queries expect a different schema than documents.
             # Documents looks like:
             #    ["id", "values", "sparse_values", "metadata"]
@@ -78,6 +80,9 @@ class Dataset:
             # keeping a large complete dataset in memory for each
             # worker process).
             self.queries = self.queries.sample(frac=doc_sample_fraction, random_state=1)
+            logging.info(
+                f"Using {doc_sample_fraction * 100}% of documents' dataset "
+                f"for query data ({len(self.queries)} sampled)")
 
     def upsert_into_index(self, index_host, api_key, skip_if_count_identical: bool = False):
         """
