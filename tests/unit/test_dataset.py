@@ -11,14 +11,14 @@ class TestDataset:
     def test_limit(self):
         limit = 123
         name = "langchain-python-docs-text-embedding-ada-002"
-        dataset = Dataset(name)
+        dataset = Dataset(name, limit=limit)
         # Sanity check that the complete dataset size is greater than what
         # we are going to limit to.
         dataset_info = ([d for d in dataset.list() if d["name"] == name][0])
         assert dataset_info["documents"] > limit, \
             "Too few documents in dataset to be able to limit"
 
-        dataset.load(limit=limit, load_queries=False)
+        dataset.load_documents()
         assert len(dataset.documents) == limit
 
     def test_recall_equal(self):

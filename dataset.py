@@ -45,10 +45,11 @@ class Dataset:
         recall = true_positives / relevent_size
         return recall
 
-    def __init__(self, name: str = "", cache_dir: str = ""):
+    def __init__(self, name: str = "", cache_dir: str = "", limit: int = 0):
         self.name = name
         self.cache = pathlib.Path(cache_dir)
-        self.documents = None
+        self.limit = limit
+        self.documents = pandas.DataFrame()
         self.queries = pandas.DataFrame()
 
     @staticmethod
@@ -65,9 +66,7 @@ class Dataset:
             datasets.append(json.loads(m.download_as_bytes()))
         return datasets
 
-    def load(self, skip_download: bool = False, load_queries: bool = True,
-             limit: int = 0,
-             doc_sample_fraction: float = 1.0):
+    def load_documents(self, skip_download: bool = False):
         """
         Load the dataset, populating the 'documents' and 'queries' DataFrames.
         """
@@ -76,7 +75,11 @@ class Dataset:
 
         # Load the parquet dataset (made up of one or more parquet files),
         # to use for documents into a pandas dataframe.
-        self.documents = self._load_parquet_dataset("documents", limit=limit)
+        self.documents = self._load_parquet_dataset("documents", limit=self.limit)
+
+    def setup_queries(self,
+                      load_queries: bool = True,
+                      doc_sample_fraction: float = 1.0):
 
         # If there is an explicit 'queries' dataset, then load that and use
         # for querying, otherwise use documents directly.
@@ -94,6 +97,9 @@ class Dataset:
             #
             # Extract 'values' and rename to query schema (only
             # 'vector' field of queries is currently used).
+            if self.documents.empty:
+                self.load_documents()
+            assert not self.documents.empty, "Cannot sample 'documents' to use for queries as it is empty"
             self.queries = self.documents[["values"]].copy()
             self.queries.rename(columns={"values": "vector"}, inplace=True)
 
