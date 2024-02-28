@@ -43,7 +43,7 @@ runs:
     - name: Create index
       id: create-index
       shell: bash
-      run: python3 tests/scripts/create_index.py
+      run: poetry run python3 tests/scripts/create_index.py
       env:
         PINECONE_API_KEY: ${{ inputs.PINECONE_API_KEY }}
         NAME_PREFIX: ${{ inputs.name_prefix }}
