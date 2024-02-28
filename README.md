@@ -1,4 +1,4 @@
-`<h1 align="center"><img src="./readme/pinecone-logo.png" /> <img src="./readme/locust-logo.webp" height=125px/></h1>
+<h1 align="center"><img src="./readme/pinecone-logo.png" /> <img src="./readme/locust-logo.webp" height=125px/></h1>
 
 # Locust load testing for Pinecone
 
