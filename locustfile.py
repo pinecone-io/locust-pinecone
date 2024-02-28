@@ -49,7 +49,11 @@ apikey = os.environ['PINECONE_API_KEY']
 # associated DataFrame, resulting in excessive process RSS,
 # particulary with high process counts).
 import pyarrow
-pyarrow.jemalloc_set_decay_ms(0)
+try:
+    pyarrow.jemalloc_set_decay_ms(0)
+except NotImplementedError:
+    # Raised if jemalloc is not supported by the pyarrow installation - skip
+    pass
 
 
 @events.init_command_line_parser.add_listener
