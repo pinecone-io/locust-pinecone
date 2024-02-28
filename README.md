@@ -21,17 +21,17 @@ locust-pinecone is highly scalable - it can generate from 1 to 10,000 Queries pe
    git clone https://github.com/pinecone-io/locust-pinecone.git
    ```
 
-2. Create a virtual environment to run in.
+2. Use Poetry to install dependancies
    ```shell
    cd locust-pinecone
-   python3 -m venv .venv
-   source .venv/bin/activate
+   pip3 install poetry
+   poetry install
    ```
 
-3. Install project requirements:
+3. Activate environment containing dependancies
    ```shell
-    pip install -r requirements.txt
-    ```
+   poetry shell
+   ```
 
 4. Prepare the environment variables and start Locust:
    ```shell
