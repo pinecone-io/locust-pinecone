@@ -163,3 +163,14 @@ When a dataset is specified the index will be populated with it if the existing 
 1. While this can run locally on a machine in your home network, you **will** experience additional latencies depending on your location. It is recommended to use this on a VM in the cloud, preferably on the same cloud provider (GCP,AWS) and in the same region to minimize the latency. This will give a more accurate picture of how your infrastructure performs with Pinecone when you go to production.
 2. The test cases included in the locust.py file are designed to generate random queries along with random categories. It also exercises several endpoints such as query, fetch, delete, and demonstrates metadata filtering. You should consider your use case and adjust these tests accordingly to reflect the real world scenarios you expect to encounter.
 3. There is a lot of functionality built into Locust and we encourage you to [review the documentation](https://docs.locust.io/en/stable/index.html) and make use of all of the functionality it offers.
+
+
+## Developing locust-pinecone
+
+PRs are welcome!
+
+The project defines a set of [pre-commit hooks](https://pre-commit.com), which should be enabled to check commits pass all checks. After installing project dependencies (via `poetry install`), run:
+
+```shell
+pre-commit install
+```
