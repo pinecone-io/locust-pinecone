@@ -11,6 +11,7 @@ from locust import FastHttpUser, User, constant_throughput, events, tag, task
 from locust.env import Environment
 from locust.exception import StopUser
 from locust.runners import Runner, WorkerRunner
+import locust.stats
 from locust.user.task import DefaultTaskSet, TaskSet
 import logging
 import numpy as np
@@ -375,11 +376,15 @@ class PineconeSdk(User):
         self.host = environment.host
 
         if use_grpc:
-            self.request_type="Pine gRPC"
+            self.request_type="Pinecone gRPC"
             self.pinecone = PineconeGRPC(apikey)
         else:
-            self.request_type="Pine"
+            self.request_type="Pinecone"
             self.pinecone = Pinecone(apikey)
+        # Ensure stats 'Type' column is wide enough for our chosen mode so
+        # tables render correctly aligned (by default is only 8 chars wide).
+        locust.stats.STATS_TYPE_WIDTH = len(self.request_type) + 1
+
         self.index = self.pinecone.Index(host=self.host)
 
     def query(self, name: str, q_vector: list, top_k: int, q_filter=None, namespace=None):
