@@ -7,7 +7,7 @@ import time
 from functools import wraps
 import gevent
 import grpc.experimental.gevent as grpc_gevent
-from locust import FastHttpUser, User, events, tag, task
+from locust import FastHttpUser, User, constant_throughput, events, tag, task
 from locust.env import Environment
 from locust.exception import StopUser
 from locust.runners import Runner, WorkerRunner
@@ -87,6 +87,10 @@ def _(parser):
                                  "(default: %(default)s).")
     pc_options.add_argument("--pinecone-dataset-cache", type=str, default=".dataset_cache",
                             help="Path to directory to cache downloaded datasets (default: %(default)s).")
+    pc_options.add_argument("--pinecone-throughput-per-user", type=float, default=0,
+                            help="How many requests per second each user should issue (default: %(default)s). "
+                                 "Setting to zero will make each user issue requests as fast as possible "
+                                 "(next request sent as soon as previous one completes).")
 
     # iterations option included from locust-plugins
     parser.add_argument(
@@ -254,10 +258,16 @@ class PineconeUser(User):
             self.client = PineconeSdk(self.environment, use_grpc=True)
         else:
             raise Exception(f"Invalid pinecone_mode {self.mode}")
+        self.target_throughput = environment.parsed_options.pinecone_throughput_per_user
 
         if isinstance(self.environment.runner, WorkerRunner):
             # Wait until the datset has been loaded for this environment (Runner)
             environment.setup_dataset_greenlet.join()
+
+    def wait_time(self):
+        if self.target_throughput > 0:
+            return constant_throughput(self.target_throughput)(self)
+        return 0
 
     @tag('query')
     @task

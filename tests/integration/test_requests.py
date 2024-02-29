@@ -155,3 +155,12 @@ class TestPineconeModes(TestPineconeBase):
 
     def test_pinecone_delete(self, index_host, mode):
         self.do_request(index_host, mode, 'delete', 'Delete')
+
+    def test_pinecone_limit_throughput(self, index_host, mode):
+        self.do_request(index_host, mode, 'query', 'Vector (Query only)',
+                        extra_args=["--pinecone-throughput-per-user=1"])
+
+    def test_pinecone_unlimited_throughput(self, index_host, mode):
+        # Test that a limit of 0 meaning "unlimited" is handled correctly.
+        self.do_request(index_host, mode, 'query', 'Vector (Query only)',
+                    extra_args=["--pinecone-throughput-per-user=0"])
