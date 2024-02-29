@@ -147,20 +147,31 @@ def setup_dataset(environment: Environment, skip_download_and_populate: bool = F
         sys.exit(1)
 
     logging.info(f"Loading Dataset {dataset_name} into memory for Worker {os.getpid()}...")
-    environment.dataset = Dataset(dataset_name, environment.parsed_options.pinecone_dataset_cache)
-    ignore_queries = environment.parsed_options.pinecone_dataset_ignore_queries
-    sample_ratio = environment.parsed_options.pinecone_dataset_docs_sample_for_query
     limit = environment.parsed_options.pinecone_dataset_limit
-    environment.dataset.load(skip_download=skip_download_and_populate,
-                             load_queries=not ignore_queries,
-                             limit=limit,
-                             doc_sample_fraction=sample_ratio)
+    environment.dataset = Dataset(dataset_name, environment.parsed_options.pinecone_dataset_cache, limit=limit)
+
+    # The dataset contains a 'documents' set - the actual vectors to index, and optionally a 'queries' set -
+    # the vectors to use for querying.
+    # Depending on how locust has been configured, we may need to load none, one or both of these sets - they can be
+    # large and take time to load, therefore we want to avoid doing any unnecessary work.
+    #   * We must load the 'documents' set if we need to populate the index, or if there is no explicit 'queries' set
+    #     and hence we need to sample them from the documents set.
+    #   * We must load the 'query' set if it exists (and we haven't been instructed to skip loading it).
+    # To simplify the inter-dependencies, we load each on-demand when needed.
     populate = environment.parsed_options.pinecone_populate_index
     if not skip_download_and_populate and populate != "never":
+        logging.debug(f"Loading documents")
+        environment.dataset.load_documents(skip_download=skip_download_and_populate)
+
         logging.info(
             f"Populating index {environment.host} with {len(environment.dataset.documents)} vectors from dataset '{dataset_name}'")
         environment.dataset.upsert_into_index(environment.host, apikey,
                                               skip_if_count_identical=(populate == "if-count-mismatch"))
+
+    ignore_queries = environment.parsed_options.pinecone_dataset_ignore_queries
+    sample_ratio = environment.parsed_options.pinecone_dataset_docs_sample_for_query
+    environment.dataset.setup_queries(load_queries=not ignore_queries, doc_sample_fraction=sample_ratio)
+
     # We no longer need documents - if we were populating then that is
     # finished, and if not populating then we don't need documents for
     # anything else.
