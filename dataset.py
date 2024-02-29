@@ -42,7 +42,7 @@ class Dataset:
         metadata_blobs = bucket.list_blobs(match_glob="*/metadata.json")
         datasets = []
         for m in metadata_blobs:
-            datasets.append(json.loads(m.download_as_string()))
+            datasets.append(json.loads(m.download_as_bytes()))
         return datasets
 
     def load(self, skip_download: bool = False, load_queries: bool = True,
