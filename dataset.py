@@ -25,6 +25,26 @@ class Dataset:
             batch = df.iloc[i: i + batch_size]
             yield batch
 
+    @staticmethod
+    def recall(actual_matches: list, expected_matches: list):
+        # Recall@K : how many relevant items were returned against how many
+        # relevant items exist in the entire dataset. Defined as:
+        #     truePositives / (truePositives + falseNegatives)
+        #
+        # To allow us to calculate Recall when the count of actual_matches from
+        # the query differs from expected_matches (e.g. when Query is
+        # executed with a top_k different to what the Dataset was built with),
+        # limit denominator to the minimum of the expected & actual.
+        # (This allows use to use a Dataset with say 100 exact nearest
+        # neighbours and still test the quality of results when querying at
+        # top_k==10 as-if only the 10 exact nearest neighbours had been
+        # provided).
+        relevent_size = min(len(actual_matches), len(expected_matches))
+        expected_matches = expected_matches[:relevent_size]
+        true_positives = len(set(expected_matches).intersection(set(actual_matches)))
+        recall = true_positives / relevent_size
+        return recall
+
     def __init__(self, name: str = "", cache_dir: str = ""):
         self.name = name
         self.cache = pathlib.Path(cache_dir)
