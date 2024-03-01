@@ -30,7 +30,11 @@ class Dataset:
         # Recall@K : how many relevant items were returned against how many
         # relevant items exist in the entire dataset. Defined as:
         #     truePositives / (truePositives + falseNegatives)
-        #
+
+        # Handle degenerate case of zero matches.
+        if not actual_matches:
+            return 0
+
         # To allow us to calculate Recall when the count of actual_matches from
         # the query differs from expected_matches (e.g. when Query is
         # executed with a top_k different to what the Dataset was built with),
@@ -39,10 +43,10 @@ class Dataset:
         # neighbours and still test the quality of results when querying at
         # top_k==10 as-if only the 10 exact nearest neighbours had been
         # provided).
-        relevent_size = min(len(actual_matches), len(expected_matches))
-        expected_matches = expected_matches[:relevent_size]
+        relevant_size = min(len(actual_matches), len(expected_matches))
+        expected_matches = expected_matches[:relevant_size]
         true_positives = len(set(expected_matches).intersection(set(actual_matches)))
-        recall = true_positives / relevent_size
+        recall = true_positives / relevant_size
         return recall
 
     def __init__(self, name: str = "", cache_dir: str = "", limit: int = 0):

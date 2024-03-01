@@ -70,7 +70,7 @@ class TestPineconeBase:
                 assert s['num_requests'] == 1
                 assert s['num_failures'] == 0
         assert proc.returncode == 0
-
+        return stats
 
 class TestPinecone(TestPineconeBase):
     def test_datasets_list(self):
@@ -139,10 +139,10 @@ class TestPinecone(TestPineconeBase):
         # Simple smoke-test for --pinecone-recall; check it is accepted
         # and no errors occur.
         test_dataset = "ANN_MNIST_d784_euclidean"
-        self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
-                        extra_args=["--pinecone-dataset", test_dataset,
-                                    "--pinecone-dataset-limit", "10",
-                                    "--pinecone-recall"])
+        stats = self.do_request(index_host, "sdk", 'query', 'Vector (Query only)',
+                                timeout=60,
+                                extra_args=["--pinecone-dataset", test_dataset,
+                                            "--pinecone-recall"])
 
     def test_recall_requires_nearest_neighbours(self, index_host):
         # --pinecone-recall is incompatible with a dataset without
@@ -154,6 +154,18 @@ class TestPinecone(TestPineconeBase):
                                          extra_args=["--tags", "query", "--pinecone-recall"])
         assert "cannot calculate Recall" in stderr
         assert proc.returncode == 1
+
+    def test_recall_no_matches(self, index_host):
+        # Test that having zero matches (e.g. namespace query where no
+        # documents match) is handled correctly.
+        test_dataset = "ANN_MNIST_d784_euclidean"
+        stats = self.do_request(index_host, "sdk", 'query_namespace', 'Vector + Namespace',
+                                timeout=60,
+                                extra_args=["--pinecone-dataset", test_dataset,
+                                            "--pinecone-dataset-limit", "10",
+                                            "--pinecone-recall"])
+        assert stats[0]["min_response_time"] == 0
+        assert stats[0]["max_response_time"] == 0
 
 @pytest.mark.parametrize("mode", ["rest", "sdk", "sdk+grpc"])
 class TestPineconeModes(TestPineconeBase):
