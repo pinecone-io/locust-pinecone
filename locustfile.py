@@ -94,6 +94,9 @@ def _(parser):
                             help="How many requests per second each user should issue (default: %(default)s). "
                                  "Setting to zero will make each user issue requests as fast as possible "
                                  "(next request sent as soon as previous one completes).")
+    pc_options.add_argument("--pinecone-destructive-tasks",
+                            action=argparse.BooleanOptionalAction,
+                            help="If set then destructive tasks (e.g. delete) will be included in the set of tasks run")
 
     # iterations option included from locust-plugins
     parser.add_argument(
@@ -111,6 +114,9 @@ def on_locust_init(environment, **_kwargs):
         # For Worker runners dataset setup is deferred until the test starts,
         # to avoid multiple processes trying to downlaod at the same time.
         setup_dataset(environment)
+
+    if environment.parsed_options.pinecone_destructive_tasks:
+        PineconeUser.tasks.append(PineconeUser.deleteById)
 
 
 def setup_dataset(environment: Environment, skip_download_and_populate: bool = False):
@@ -307,7 +313,8 @@ class PineconeUser(User):
         self.client.fetch(randId)
 
     @tag('delete')
-    @task
+    # Note this method does not have the '@task' decorator as we don't include
+    # it in the default set of tasks - see --pinecone-destructive-tasks.
     def deleteById(self):
         randId = str(random.randint(0,85794))
         self.client.delete(randId)

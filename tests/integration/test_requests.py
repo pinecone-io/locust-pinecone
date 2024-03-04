@@ -167,6 +167,7 @@ class TestPinecone(TestPineconeBase):
         assert stats[0]["min_response_time"] == 0
         assert stats[0]["max_response_time"] == 0
 
+
 @pytest.mark.parametrize("mode", ["rest", "sdk", "sdk+grpc"])
 class TestPineconeModes(TestPineconeBase):
     def test_pinecone_query(self, index_host, mode):
@@ -185,7 +186,8 @@ class TestPineconeModes(TestPineconeBase):
         self.do_request(index_host, mode, 'fetch', 'Fetch')
 
     def test_pinecone_delete(self, index_host, mode):
-        self.do_request(index_host, mode, 'delete', 'Delete')
+        self.do_request(index_host, mode, 'delete', 'Delete',
+                        extra_args=["--pinecone-destructive-tasks"])
 
     def test_pinecone_limit_throughput(self, index_host, mode):
         self.do_request(index_host, mode, 'query', 'Vector (Query only)',
