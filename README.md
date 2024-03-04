@@ -96,6 +96,98 @@ Pine gRPC Vector + Metadata        190    190    190    200    200    210    280
          Aggregated                190    190    190    190    200    210    250    310    740    740    740    163
 ```
 
+## Examples
+
+Here are some example workloads which can be performed by Locust-pinecone.
+
+See [Customising the workload](#customising-the-workload) for ways to customise how the workload is run.
+
+### Small (Quora 100k) mixed workload, single user
+
+Populate an index with 100,000 vectors taken from the _quora_all-MiniLM-L6-bm25_ dataset, then a single user will perform a mix of fetch and different queries for 60 seconds:
+```shell
+locust --host=<HOST> --headless --pinecone-dataset=quora_all-MiniLM-L6-bm25-100K --run-time=60s
+```
+Output:
+```shell
+[2024-03-04 12:16:54,288] localhost/INFO/locust.main: --run-time limit reached, shutting down
+[2024-03-04 12:16:54,371] localhost/INFO/locust.main: Shutting down (exit code 0)
+...
+Response time percentiles (approximated)
+Type           Name                                            50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------------|------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+Pinecone gRPC  Fetch                                           27     29     30     30     31     34     36     40     47     47     47    455
+Pinecone gRPC  Vector (Query only)                             26     27     27     28     29     33     35     37     43     43     43    453
+Pinecone gRPC  Vector + Metadata                               24     24     24     25     25     26     29     32    120    120    120    405
+Pinecone gRPC  Vector + Metadata + Namespace (namespace1)      24     24     24     25     25     26     29     30    100    100    100    425
+Pinecone gRPC  Vector + Namespace (namespace1)                 23     24     24     24     25     27     31     32     35     35     35    443
+--------------|------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+               Aggregated                                      24     26     27     27     29     31     34     36     47    120    120   2181
+```
+This is useful as a basic smoke-test to check the latencies of different operations from a single client to a Pinecone index.
+
+However, there's only a single User (and each user issues requests sequentially), so it gives little information about the _throughput_ which can be achieved by the given Index. 
+
+### Small (Quora 100k) mixed workload, multiple users
+
+Populate an index with 100,000 vectors taken from the _quora_all-MiniLM-L6-bm25_ dataset, then 100 users will perform a mix of fetch and different queries for 60 seconds:
+```shell
+locust --host=<HOST> --headless --pinecone-dataset=quora_all-MiniLM-L6-bm25-100K \
+    --run-time=60s --users=100 --spawn-rate=100
+```
+Output:
+```shell
+Type           Name                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------------|--------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+Pinecone gRPC  Fetch                                          18295     0(0.00%) |     57      20     163     57 |  304.66        0.00
+Pinecone gRPC  Vector (Query only)                            18623     0(0.00%) |     57      21     169     57 |  310.12        0.00
+Pinecone gRPC  Vector + Metadata                              18113     0(0.00%) |     56      20     161     57 |  301.63        0.00
+Pinecone gRPC  Vector + Metadata + Namespace (namespace1)     18080     0(0.00%) |     56      20     183     57 |  301.08        0.00
+Pinecone gRPC  Vector + Namespace (namespace1)                18083     0(0.00%) |     56      20     193     57 |  301.13        0.00
+--------------|--------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+               Aggregated                                     91194     0(0.00%) |     56      20     193     57 | 1518.63        0.00
+```
+This Index is capable of _at least_ 1518 requests per second, with average latencies of 56ms. It may be capable of more, depending on if 100 Users is sufficient or not to expose sufficient concurrency, or if the current client machine is already saturated.
+
+Indeed, monitoring the client machine while the workload is running shows %CPU reaching 100%. Locust is [effectively limited to a single core](https://docs.locust.io/en/stable/running-distributed.html), so the client _may_ be a bottleneck currently.
+
+### Small (Quora 100k) mixed workload, multiple users, multiple processes
+
+We can increase the number of processes which locust generates the load across, to see if this is the current throughput bottleneck. Spreading workload across 2 processes:
+
+```shell
+locust --host=<HOST> --headless --pinecone-dataset=quora_all-MiniLM-L6-bm25-100K \
+    --run-time=60s --users=100 --spawn-rate=100 --processes=2
+```
+
+Output:
+```shell
+...
+Type     Name                                                # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|--------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+Pinecone gRPC  Fetch                                          23661     0(0.00%) |     44      20     174     37 |  394.00        0.00
+Pinecone gRPC  Vector (Query only)                            23484     0(0.00%) |     47      22     178     45 |  391.05        0.00
+Pinecone gRPC  Vector + Metadata                              23441     0(0.00%) |     46      20     175     41 |  390.34        0.00
+Pinecone gRPC  Vector + Metadata + Namespace (namespace1)     23654     0(0.00%) |     46      20     184     41 |  393.88        0.00
+Pinecone gRPC  Vector + Namespace (namespace1)                23731     0(0.00%) |     46      21     170     41 |  395.17        0.00
+--------|--------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                          117971     0(0.00%) |     46      20     184     40 | 1964.44        0.00
+```
+
+We see that doubling the number of processes from 1 to 2 has increased throughput from 1518 to 1964, or 1.29x, with average latency as good or better than the previous run. This suggests that 1 process with 100 Users _was_ insufficient fully utilise the Index - we needed to increase to 2 locust client processes to achieve higher throughput.
+
+However, we did not see a linear scaling (i.e. 2x throughput). This suggests that we have hit some new bottleneck - perhaps the network between the client and the Index, perhaps the amount of Users (request concurrency), or perhaps the capacity of the current Index configuration. 
+
+
+### Medium (9.99M) Query-only workload, fixed throughput
+
+Populate an index with 9.99M vectors, then perform a fixed Query load of 100 QPS performed by 100 concurrent Users.
+
+This is useful to determine what kind of latency can be achieved for a given expected client workload, on a dataset which is more representative of a small production system:
+```shell
+locust --host=<HOST> --headless --pinecone-dataset=ANN_DEEP1B_d96_angular --run-time=60s \
+    --users=100 --spawn-rate=100 --pinecone-throughput-per-user=1 --tags query
+```
 
 ## Customising the workload
 
