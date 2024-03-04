@@ -158,6 +158,45 @@ When a dataset is specified the index will be populated with it if the existing 
 * `never`: Never populate from dataset.
 * `if-count-mismatch` (default): Populate if the number of items in the index differs from the number of items in th dataset, otherwise skip population
 
+### Measuring Recall
+
+In additional to latency, the [Recall](https://www.pinecone.io/learn/offline-evaluation/#Recall@K) of Query requests
+can also be measured and reported via the `--pinecone-recall` option. This requires a Dataset is used (`--pinecone-dataset=`) which includes a _queries_ set - so there is an exact-NN to evaluate the Query results against.
+
+> [!TIP]
+> `--pinecone-datasets=list` can be used examine which Datasets have a Queries set. For example, the `ANN_LastFM_d64_angular` dataset meets these requirements:
+>  ```shell
+>   $ locust --pinecone-dataset=list
+>   ...
+>   Name                                            Documents    Queries    Dimension
+>   --------------------------------------------  -----------  ---------  -----------
+>   ANN_DEEP1B_d96_angular                            9990000      10000           96
+>   ANN_Fashion-MNIST_d784_euclidean                    60000      10000          784
+>   ANN_LastFM_d64_angular                             292385      50000           65
+>   ...
+>   ```
+
+Locust doesn't currently have a way to add additional metrics to the statistics reported, so Recall values are reported instead of latencies; expressing the Recall as a value between 0 and 100 (Locust doesn't support fractional latency values). 
+
+Example of measuring Recall for "ANN_LastFM_d64_angular" dataset for 10s runtime:
+
+```shell
+$ locust --host=<HOST> --headless --pinecone-dataset=ANN_LastFM_d64_angular --pinecone-recall --tag query --run-time=10s
+...
+Type           Name                        # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------------|----------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+Pinecone gRPC  Vector (Query only)       1117     0(0.00%) |     96      10     100    100 |   18.59        0.00
+--------------|----------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+               Aggregated                1117     0(0.00%) |     96      10     100    100 |   18.59        0.00
+
+Response time percentiles (approximated)
+Type           Name                        50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------------|----------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+Pinecone gRPC  Vector (Query only)         100    100    100    100    100    100    100    100    100    100    100   1117
+--------------|----------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+               Aggregated                  100    100    100    100    100    100    100    100    100    100    100   1117
+```
+
 ## Additional performance notes and optimizations (all environments)
 
 1. While this can run locally on a machine in your home network, you **will** experience additional latencies depending on your location. It is recommended to use this on a VM in the cloud, preferably on the same cloud provider (GCP,AWS) and in the same region to minimize the latency. This will give a more accurate picture of how your infrastructure performs with Pinecone when you go to production.
