@@ -7,6 +7,7 @@ GITHUB_OUTPUT.
 import os
 import random
 import string
+import datetime
 from pinecone import Pinecone
 
 
@@ -28,7 +29,9 @@ def write_gh_output(name, value):
 
 def main():
     pc = Pinecone(api_key=read_env_var('PINECONE_API_KEY'))
-    index_name = read_env_var('NAME_PREFIX') + random_string(20)
+    now = datetime.datetime.utcnow().replace(microsecond=0).isoformat().replace(':', "-")
+    index_name = read_env_var('NAME_PREFIX') + "--" + now + "--" + random_string(10)
+    index_name = index_name.lower()
     environment = os.environ.get('ENVIRONMENT')
     if environment:
         spec = {
