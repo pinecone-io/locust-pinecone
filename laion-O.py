@@ -4,13 +4,16 @@
 Program to load a LAION dataset (https://laion.ai/blog/laion-400-open-dataset/)
 into Pinecone.
 """
+import natsort
 import pandas
 from pinecone.grpc import PineconeGRPC
 import pathlib
 import numpy
 import os
 import pyarrow.parquet
+import re
 import sys
+from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
 from tqdm import tqdm
 
@@ -21,7 +24,15 @@ def split_dataframe(df, batch_size):
         yield batch
 
 
+@retry(wait=wait_exponential_jitter(), stop=stop_after_attempt(5))
+def do_upsert_with_retry(index, frame: pandas.DataFrame):
+    return index.upsert_from_dataframe(frame,
+                                       batch_size=500,
+                                       show_progress=False)
+
+
 def upsert_segment(index: PineconeGRPC.Index, pair):
+    print(pair)
     vectors = numpy.load(pair[0])
     metadata_rows = ["caption", "url"]
     metadata = pandas.read_parquet(pair[1], columns=["key", "shard_id", "NSFW"] + metadata_rows)
@@ -66,10 +77,8 @@ def upsert_segment(index: PineconeGRPC.Index, pair):
     pbar = tqdm(desc="Upserting vectors", unit=" vectors", total=len(df))
     upserted_count = 0
 
-    for sub_frame in split_dataframe(df, 10000):
-        resp = index.upsert_from_dataframe(sub_frame,
-                                           batch_size=200,
-                                           show_progress=False)
+    for sub_frame in split_dataframe(df, 5000):
+        resp = do_upsert_with_retry(index, sub_frame)
         upserted_count += resp.upserted_count
         pbar.update(len(sub_frame))
 
@@ -113,6 +122,22 @@ def main():
               f"to the number of metadata files ({len(files[1])}). Expected "
               "an equal number.")
 
+    # Check the numbers match
+    files[0] = natsort.natsorted(files[0])
+    files[1] = natsort.natsorted(files[1])
+    # Sanity check - do the file numbers match?
+    for pair in zip(files[0], files[1]):
+        ids = list()
+        for f in pair:
+            ident = re.search(r'\d+', f.name)
+            if ident is None:
+                print(f"Error: Unable to find id number in file '{f}'")
+                return 1
+            ids.append(ident.group())
+        if ids[0] != ids[1]:
+            print(f"Error: Mismatch in IDs for files '{pair[0]}' and '{pair[1]}'")
+            return 1
+        
     # Check the index exists and we can connect to it. Using GRPC as for
     # bulk upsert it is quicker than HTTP.
     pc = PineconeGRPC(api_key=api_key)
@@ -122,7 +147,9 @@ def main():
     for pair in tqdm(zip(files[0], files[1]), desc="Processing segment",
                      total=len(list(files[0]))):
         upsert_segment(index, pair)
-
+        for f in pair:
+            (f.parent / "done").mkdir(exist_ok=True)
+            f.rename(f.parent / "done" / f.name)
 
 if __name__ == "__main__":
     main()
