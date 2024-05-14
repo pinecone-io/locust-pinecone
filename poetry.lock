@@ -1418,13 +1418,13 @@ xml = ["lxml (>=4.9.2)"]
 
 [[package]]
 name = "pinecone-client"
-version = "4.0.0"
+version = "4.1.0"
 description = "Pinecone client and SDK"
 optional = false
 python-versions = "<4.0,>=3.8"
 files = [
-    {file = "pinecone_client-4.0.0-py3-none-any.whl", hash = "sha256:606a6acb70e387ebcc2ae29b1848f197e58226d1d7267ea87a22cb561a36bdf1"},
-    {file = "pinecone_client-4.0.0.tar.gz", hash = "sha256:d44db212e64aa343d14efc9b08e9e45d98ba7b681f63298b87033542ea017f23"},
+    {file = "pinecone_client-4.1.0-py3-none-any.whl", hash = "sha256:9cb9a66cab86b29d526cc99fe6ab151f577967a447c81448057dcd8682646a55"},
+    {file = "pinecone_client-4.1.0.tar.gz", hash = "sha256:42062a628e7a941d0bc24bb8afb026f3ad4d264cf06d6a627a3de583214ae3de"},
 ]
 
 [package.dependencies]
@@ -2246,4 +2246,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "7ca9815489bf285c824c6d77b969b57baeafcae9c397a7b7ea482d61ef9fbaf3"
+content-hash = "6e8baf1c312d36c0cd53034f96de94827e1a60f5bef9f7f37b8da4c020d31803"
